@@ -1,6 +1,8 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.24;
 
+import {IWAGACoffeeInventoryToken} from "./IWAGACoffeeInventoryToken.sol";
+
 /**
  * @title ICooperativeLoanManager
  * @author WAGA DAO - Regenerative Coffee Global Impact
@@ -46,6 +48,21 @@ interface ICooperativeLoanManager {
         uint256[] batchIds
     );
     
+    event GreenfieldLoanCreated(
+        uint256 indexed loanId,
+        uint256 indexed projectId,
+        address indexed cooperative,
+        uint256 amount,
+        uint256 durationYears
+    );
+    
+    event GreenfieldStageCompleted(
+        uint256 indexed loanId,
+        uint256 indexed projectId,
+        uint256 stage,
+        uint256 disbursementAmount
+    );
+    
     event LoanDisbursed(uint256 indexed loanId, uint256 amount);
     event LoanRepayment(uint256 indexed loanId, uint256 amount, uint256 remainingBalance);
     event LoanDefaulted(uint256 indexed loanId);
@@ -80,10 +97,42 @@ interface ICooperativeLoanManager {
     ) external returns (uint256 loanId);
 
     /**
+     * @notice Creates a greenfield loan for new coffee project development
+     * @param cooperative Address of the cooperative (can be newly formed)
+     * @param amount Total loan amount in USDC (6 decimals)
+     * @param durationYears Loan duration in years (typically 5-10 for greenfield)
+     * @param interestRate Annual interest rate in basis points
+     * @param projectParams Parameters for the greenfield project
+     * @return loanId The newly created loan ID
+     * @return projectId The newly created greenfield project ID
+     */
+    function createGreenfieldLoan(
+        address cooperative,
+        uint256 amount,
+        uint256 durationYears,
+        uint256 interestRate,
+        IWAGACoffeeInventoryToken.GreenfieldProjectParams memory projectParams
+    ) external returns (uint256 loanId, uint256 projectId);
+
+    /**
      * @notice Disburses USDC loan to cooperative
      * @param loanId Loan ID to disburse
      */
     function disburseLoan(uint256 loanId) external;
+
+    /**
+     * @notice Disburses greenfield loan in stages based on project milestones
+     * @param loanId Loan ID to disburse
+     * @param stage Project stage that has been completed (0-5)
+     * @param disbursementAmount Amount to disburse for this stage
+     * @param milestoneEvidence IPFS hash of milestone completion evidence
+     */
+    function disburseGreenfieldStage(
+        uint256 loanId,
+        uint256 stage,
+        uint256 disbursementAmount,
+        string memory milestoneEvidence
+    ) external;
 
     /**
      * @notice Allows cooperative to repay loan

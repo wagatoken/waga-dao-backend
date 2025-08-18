@@ -125,6 +125,21 @@ contract CooperativeLoanManager is AccessControl, Pausable, ReentrancyGuard {
         uint256[] batchIds
     );
     
+    event GreenfieldLoanCreated(
+        uint256 indexed loanId,
+        uint256 indexed projectId,
+        address indexed cooperative,
+        uint256 amount,
+        uint256 durationYears
+    );
+    
+    event GreenfieldStageCompleted(
+        uint256 indexed loanId,
+        uint256 indexed projectId,
+        uint256 stage,
+        uint256 disbursementAmount
+    );
+    
     event LoanDisbursed(uint256 indexed loanId, uint256 amount);
     event LoanRepayment(uint256 indexed loanId, uint256 amount, uint256 remainingBalance);
     event LoanDefaulted(uint256 indexed loanId);
@@ -265,6 +280,76 @@ contract CooperativeLoanManager is AccessControl, Pausable, ReentrancyGuard {
     }
 
     /**
+     * @notice Creates a loan for greenfield coffee project development
+     * @param cooperative Address of the cooperative (can be newly formed)
+     * @param amount Total loan amount in USDC (6 decimals)
+     * @param durationYears Loan duration in years (typically 5-10 for greenfield)
+     * @param interestRate Annual interest rate in basis points (e.g., 500 = 5%)
+     * @param projectParams Parameters for the greenfield project
+     * @return loanId The newly created loan ID
+     * @return projectId The newly created greenfield project ID
+     */
+    function createGreenfieldLoan(
+        address cooperative,
+        uint256 amount,
+        uint256 durationYears,
+        uint256 interestRate,
+        IWAGACoffeeInventoryToken.GreenfieldProjectParams memory projectParams
+    ) external onlyRole(LOAN_MANAGER_ROLE) whenNotPaused returns (uint256 loanId, uint256 projectId) {
+        // Validation for greenfield loans
+        if (amount < MIN_LOAN_AMOUNT) {
+            revert CooperativeLoanManager__InvalidLoanAmount();
+        }
+        if (durationYears == 0 || durationYears > 10) { // Max 10 years for greenfield
+            revert CooperativeLoanManager__InvalidDuration();
+        }
+        if (interestRate > 8000) { // Max 80% APR for greenfield (higher risk)
+            revert CooperativeLoanManager__InvalidInterestRate();
+        }
+
+        // Set the loan value in the project parameters
+        projectParams.loanValue = amount;
+
+        // Create the greenfield project first
+        projectId = coffeeInventoryToken.createGreenfieldProject(projectParams);
+
+        loanId = nextLoanId++;
+        uint256 maturityTime = block.timestamp + (durationYears * 365 days);
+
+        // Create array with single greenfield project ID
+        uint256[] memory batchIds = new uint256[](1);
+        batchIds[0] = projectId;
+
+        // Create loan
+        loans[loanId] = LoanInfo({
+            cooperative: cooperative,
+            amount: amount,
+            disbursedAmount: 0,
+            repaidAmount: 0,
+            interestRate: interestRate,
+            startTime: block.timestamp,
+            maturityTime: maturityTime,
+            batchIds: batchIds,
+            status: LoanStatus.Pending,
+            purpose: "Greenfield Coffee Production Development",
+            cooperativeName: projectParams.cooperativeName,
+            location: projectParams.location
+        });
+
+        // Update mappings
+        cooperativeLoans[cooperative].push(loanId);
+        allLoanIds.push(loanId);
+        batchToLoan[projectId] = loanId;
+
+        // Grant cooperative role for loan management
+        _grantRole(COOPERATIVE_ROLE, cooperative);
+
+        emit LoanCreated(loanId, cooperative, amount, maturityTime, batchIds);
+        emit GreenfieldLoanCreated(loanId, projectId, cooperative, amount, durationYears);
+        return (loanId, projectId);
+    }
+
+    /**
      * @notice Disburses USDC loan to cooperative
      * @param loanId Loan ID to disburse
      */
@@ -291,6 +376,65 @@ contract CooperativeLoanManager is AccessControl, Pausable, ReentrancyGuard {
         usdcToken.safeTransferFrom(treasury, loan.cooperative, loan.amount);
 
         emit LoanDisbursed(loanId, loan.amount);
+    }
+
+    /**
+     * @notice Disburses greenfield loan in stages based on project milestones
+     * @param loanId Loan ID to disburse
+     * @param stage Project stage that has been completed (0-5)
+     * @param disbursementAmount Amount to disburse for this stage
+     * @param milestoneEvidence IPFS hash of milestone completion evidence
+     */
+    function disburseGreenfieldStage(
+        uint256 loanId,
+        uint256 stage,
+        uint256 disbursementAmount,
+        string memory milestoneEvidence
+    ) external onlyRole(LOAN_MANAGER_ROLE) validLoanId(loanId) nonReentrant {
+        LoanInfo storage loan = loans[loanId];
+        
+        if (loan.status != LoanStatus.Pending && loan.status != LoanStatus.Active) {
+            revert CooperativeLoanManager__LoanNotActive();
+        }
+        
+        // Check that this is a greenfield project (single batch ID that is a greenfield project)
+        if (loan.batchIds.length != 1) {
+            revert("Not a greenfield loan");
+        }
+        
+        uint256 projectId = loan.batchIds[0];
+        
+        // Verify this is actually a greenfield project
+        (bool isGreenfield,,,,) = coffeeInventoryToken.getGreenfieldProjectDetails(projectId);
+        if (!isGreenfield) {
+            revert("Not a greenfield project");
+        }
+        
+        // Check treasury has sufficient balance
+        uint256 treasuryBalance = usdcToken.balanceOf(treasury);
+        if (treasuryBalance < disbursementAmount) {
+            revert CooperativeLoanManager__InsufficientTreasuryBalance();
+        }
+        
+        // Check total disbursements don't exceed loan amount
+        if (loan.disbursedAmount + disbursementAmount > loan.amount) {
+            revert("Disbursement exceeds loan amount");
+        }
+
+        // Advance the greenfield project stage
+        coffeeInventoryToken.advanceGreenfieldStage(projectId, stage, 0, milestoneEvidence);
+
+        // Update loan status and disbursed amount
+        if (loan.status == LoanStatus.Pending) {
+            loan.status = LoanStatus.Active;
+        }
+        loan.disbursedAmount += disbursementAmount;
+
+        // Transfer USDC from treasury to cooperative
+        usdcToken.safeTransferFrom(treasury, loan.cooperative, disbursementAmount);
+
+        emit LoanDisbursed(loanId, disbursementAmount);
+        emit GreenfieldStageCompleted(loanId, projectId, stage, disbursementAmount);
     }
 
     /**
@@ -394,6 +538,40 @@ contract CooperativeLoanManager is AccessControl, Pausable, ReentrancyGuard {
      */
     function getLoan(uint256 loanId) external view validLoanId(loanId) returns (LoanInfo memory) {
         return loans[loanId];
+    }
+
+    /**
+     * @notice Returns loan information with individual fields for easier testing
+     */
+    function getLoanInfo(uint256 loanId) external view validLoanId(loanId) returns (
+        address cooperative,
+        uint256 amount,
+        uint256 disbursedAmount,
+        uint256 repaidAmount,
+        uint256 interestRate,
+        uint256 startTime,
+        uint256 maturityTime,
+        uint256[] memory batchIds,
+        LoanStatus status,
+        string memory purpose,
+        string memory cooperativeName,
+        string memory location
+    ) {
+        LoanInfo storage loan = loans[loanId];
+        return (
+            loan.cooperative,
+            loan.amount,
+            loan.disbursedAmount,
+            loan.repaidAmount,
+            loan.interestRate,
+            loan.startTime,
+            loan.maturityTime,
+            loan.batchIds,
+            loan.status,
+            loan.purpose,
+            loan.cooperativeName,
+            loan.location
+        );
     }
 
     /**

@@ -10,6 +10,8 @@ import {WAGAGovernor} from "../src/WAGAGovernor.sol";
 import {WAGATimelock} from "../src/WAGATimelock.sol";
 import {WAGACoffeeInventoryToken} from "../src/WAGACoffeeInventoryToken.sol";
 import {CooperativeLoanManager} from "../src/CooperativeLoanManager.sol";
+import {IWAGACoffeeInventoryToken} from "../src/interfaces/IWAGACoffeeInventoryToken.sol";
+import {ICooperativeLoanManager} from "../src/interfaces/ICooperativeLoanManager.sol";
 import {HelperConfig} from "../script/HelperConfig.s.sol";
 
 /**
@@ -195,5 +197,145 @@ contract WAGADAOBasicTest is Test {
         
         // Allow governor to manage loans (proposals can create/manage loans)
         loanManager.grantRole(loanManager.LOAN_MANAGER_ROLE(), address(governor));
+    }
+
+    function testGreenfieldProjectCreation() public {
+        // Setup greenfield project parameters
+        IWAGACoffeeInventoryToken.GreenfieldProjectParams memory params = IWAGACoffeeInventoryToken.GreenfieldProjectParams({
+            ipfsUri: "QmTestGreenfieldProject",
+            plantingDate: block.timestamp + 30 days, // Plant in 30 days
+            maturityDate: block.timestamp + 4 * 365 days, // Mature in 4 years
+            projectedYield: 50_000, // 50,000 kg annual yield
+            investmentStage: 0, // Planning stage
+            pricePerKg: 8_000_000, // $8 per kg (6 decimals)
+            loanValue: 250_000_000_000, // $250,000 loan (6 decimals)
+            cooperativeName: "New Green Valley Cooperative",
+            location: "Bamenda, Cameroon",
+            paymentAddress: makeAddr("newCooperative"),
+            certifications: "Organic, Regenerative",
+            farmersCount: 150
+        });
+
+        // I need to create this manually since the test is calling the contract directly
+        // Convert interface struct to contract struct for direct contract call
+        WAGACoffeeInventoryToken.GreenfieldProjectParams memory contractParams = WAGACoffeeInventoryToken.GreenfieldProjectParams({
+            ipfsUri: params.ipfsUri,
+            plantingDate: params.plantingDate,
+            maturityDate: params.maturityDate,
+            projectedYield: params.projectedYield,
+            investmentStage: params.investmentStage,
+            pricePerKg: params.pricePerKg,
+            loanValue: params.loanValue,
+            cooperativeName: params.cooperativeName,
+            location: params.location,
+            paymentAddress: params.paymentAddress,
+            certifications: params.certifications,
+            farmersCount: params.farmersCount
+        });
+
+        // Create greenfield project
+        vm.prank(deployerAccount);
+        uint256 projectId = coffeeInventoryToken.createGreenfieldProject(contractParams);
+
+        // Verify project creation
+        assertTrue(coffeeInventoryToken.batchExists(projectId));
+        
+        // Check greenfield project details
+        (
+            bool isGreenfield,
+            string memory cooperativeName,
+            string memory location,
+            uint256 investmentStage,
+            string memory stageName
+        ) = coffeeInventoryToken.getGreenfieldProjectDetails(projectId);
+        
+        assertTrue(isGreenfield);
+        assertEq(cooperativeName, "New Green Valley Cooperative");
+        assertEq(location, "Bamenda, Cameroon");
+        assertEq(investmentStage, 0);
+        assertEq(stageName, "Planning & Preparation");
+
+        // Check greenfield financials
+        (
+            uint256 plantingDate,
+            uint256 maturityDate,
+            uint256 projectedYield,
+            uint256 loanValue
+        ) = coffeeInventoryToken.getGreenfieldFinancials(projectId);
+        
+        assertEq(plantingDate, params.plantingDate);
+        assertEq(maturityDate, params.maturityDate);
+        assertEq(projectedYield, 50_000);
+        assertEq(loanValue, 250_000_000_000);
+
+        console.log("Greenfield project created successfully");
+        console.log("   Project ID:", projectId);
+        console.log("   Cooperative:", cooperativeName);
+        console.log("   Stage:", stageName);
+    }
+
+    function testGreenfieldLoanCreation() public {
+        // Setup greenfield project parameters
+        IWAGACoffeeInventoryToken.GreenfieldProjectParams memory params = IWAGACoffeeInventoryToken.GreenfieldProjectParams({
+            ipfsUri: "QmTestGreenfieldLoan",
+            plantingDate: block.timestamp + 60 days,
+            maturityDate: block.timestamp + 5 * 365 days,
+            projectedYield: 75_000,
+            investmentStage: 0,
+            pricePerKg: 9_000_000,
+            loanValue: 0, // Will be set by loan creation
+            cooperativeName: "Future Coffee Collective",
+            location: "Mount Cameroon Region",
+            paymentAddress: makeAddr("futureCooperative"),
+            certifications: "Rainforest Alliance, Fair Trade",
+            farmersCount: 200
+        });
+
+        // Create greenfield loan
+        vm.prank(deployerAccount);
+        (uint256 loanId, uint256 projectId) = loanManager.createGreenfieldLoan(
+            makeAddr("futureCooperative"),
+            300_000_000_000, // $300,000 loan
+            7, // 7 years duration
+            600, // 6% interest rate
+            params
+        );
+
+        // Verify loan creation
+        (
+            address cooperative,
+            uint256 amount,
+            uint256 disbursedAmount,
+            uint256 repaidAmount,
+            uint256 interestRate,
+            uint256 startTime,
+            uint256 maturityTime,
+            uint256[] memory batchIds,
+            CooperativeLoanManager.LoanStatus status,
+            string memory purpose,
+            string memory cooperativeName,
+            string memory location
+        ) = loanManager.getLoanInfo(loanId);
+
+        assertEq(cooperative, makeAddr("futureCooperative"));
+        assertEq(amount, 300_000_000_000);
+        assertEq(disbursedAmount, 0); // Not disbursed yet
+        assertEq(repaidAmount, 0);
+        assertEq(interestRate, 600);
+        assertTrue(status == CooperativeLoanManager.LoanStatus.Pending);
+        assertEq(purpose, "Greenfield Coffee Production Development");
+        assertEq(cooperativeName, "Future Coffee Collective");
+        assertEq(location, "Mount Cameroon Region");
+        assertEq(batchIds.length, 1);
+        assertEq(batchIds[0], projectId);
+
+        // Verify the project was created with correct loan value
+        (, , , uint256 loanValue) = coffeeInventoryToken.getGreenfieldFinancials(projectId);
+        assertEq(loanValue, 300_000_000_000);
+
+        console.log("Greenfield loan created successfully");
+        console.log("   Loan ID:", loanId);
+        console.log("   Project ID:", projectId);
+        console.log("   Loan Amount: $", amount / 1e6);
     }
 }

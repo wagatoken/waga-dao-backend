@@ -321,7 +321,7 @@ contract WAGADAOComprehensiveTest is Test {
             , // bool isMetadataVerified - not used in this test
             , // string memory packagingInfo - not used in this test
             , // string memory metadataHash - not used in this test
-             // uint256 lastVerifiedTimestamp - not used in this test
+              // uint256 lastVerifiedTimestamp - not used in this test
         ) = coffeeInventoryToken.batchInfo(batchId);
         
         assertEq(retrievedProductionDate, productionDate);
@@ -417,6 +417,14 @@ contract WAGADAOComprehensiveTest is Test {
         vm.prank(proposer);
         vertToken.delegate(proposer);
         
+        // Advance block number to make voting power active
+        vm.roll(block.number + 1);
+        
+        // Verify proposer has enough voting power
+        uint256 votingPower = vertToken.getVotes(proposer);
+        uint256 proposalThreshold = governor.proposalThreshold();
+        assertTrue(votingPower >= proposalThreshold, "Proposer should have enough voting power");
+        
         // Create a simple proposal
         address[] memory targets = new address[](1);
         uint256[] memory values = new uint256[](1);
@@ -433,6 +441,8 @@ contract WAGADAOComprehensiveTest is Test {
         
         assertTrue(proposalId > 0);
         console.log("Proposal created with ID:", proposalId);
+        console.log("Proposer voting power:", votingPower);
+        console.log("Required threshold:", proposalThreshold);
     }
 
     /* -------------------------------------------------------------------------- */

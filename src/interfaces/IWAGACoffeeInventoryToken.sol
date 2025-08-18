@@ -23,6 +23,30 @@ interface IWAGACoffeeInventoryToken {
         uint256 lastVerifiedTimestamp;
     }
 
+    struct GreenfieldInfo {
+        bool isGreenfieldProject;
+        bool isFutureProduction;
+        uint256 plantingDate;
+        uint256 maturityDate;
+        uint256 projectedYield;
+        uint256 investmentStage;
+    }
+
+    struct GreenfieldProjectParams {
+        string ipfsUri;
+        uint256 plantingDate;
+        uint256 maturityDate;
+        uint256 projectedYield;
+        uint256 investmentStage;
+        uint256 pricePerKg;
+        uint256 loanValue;
+        string cooperativeName;
+        string location;
+        address paymentAddress;
+        string certifications;
+        uint256 farmersCount;
+    }
+
     struct CooperativeInfo {
         string cooperativeName;
         string location;
@@ -38,6 +62,22 @@ interface IWAGACoffeeInventoryToken {
         string cooperativeName, 
         uint256 quantity, 
         uint256 loanValue
+    );
+    
+    event GreenfieldProjectCreated(
+        uint256 indexed projectId,
+        string cooperativeName,
+        uint256 plantingDate,
+        uint256 maturityDate,
+        uint256 projectedYield,
+        uint256 loanValue
+    );
+    
+    event GreenfieldStageAdvanced(
+        uint256 indexed projectId,
+        uint256 previousStage,
+        uint256 newStage,
+        uint256 updatedYield
     );
     
     event BatchVerified(uint256 indexed batchId, address verifier);
@@ -63,6 +103,23 @@ interface IWAGACoffeeInventoryToken {
         string memory certifications,
         uint256 farmersCount
     ) external returns (uint256 batchId);
+    
+    /**
+     * @dev Creates a greenfield coffee production project
+     */
+    function createGreenfieldProject(
+        GreenfieldProjectParams memory params
+    ) external returns (uint256 projectId);
+    
+    /**
+     * @dev Advances a greenfield project to the next development stage
+     */
+    function advanceGreenfieldStage(
+        uint256 projectId,
+        uint256 newStage,
+        uint256 updatedYield,
+        string memory milestoneEvidence
+    ) external;
     
     /**
      * @dev Verifies a batch's quality and quantity
@@ -105,6 +162,32 @@ interface IWAGACoffeeInventoryToken {
      * @dev Returns batch information
      */
     function getBatchInfo(uint256 batchId) external view returns (BatchInfo memory);
+    
+    /**
+     * @dev Returns greenfield information
+     */
+    function getGreenfieldInfo(uint256 batchId) external view returns (GreenfieldInfo memory);
+    
+    /**
+     * @dev Returns detailed greenfield project information
+     */
+    function getGreenfieldProjectDetails(uint256 projectId) external view returns (
+        bool isGreenfield,
+        string memory cooperativeName,
+        string memory location,
+        uint256 investmentStage,
+        string memory stageName
+    );
+    
+    /**
+     * @dev Returns financial information about a greenfield project
+     */
+    function getGreenfieldFinancials(uint256 projectId) external view returns (
+        uint256 plantingDate,
+        uint256 maturityDate,
+        uint256 projectedYield,
+        uint256 loanValue
+    );
     
     /**
      * @dev Returns cooperative information

@@ -40,8 +40,11 @@ contract DeployWAGADAO is Script {
         // Get network configuration
         helperConfig = new HelperConfig();
         (
+            , // address ethToken, // Native ETH (address(0)) - not used in deployment
             address usdcToken,
             address paxgToken,
+            address ethUsdPriceFeed,
+            address paxgUsdPriceFeed,
             uint256 deployerKey
         ) = helperConfig.activeNetworkConfig();
 
@@ -94,6 +97,8 @@ contract DeployWAGADAO is Script {
             address(identityRegistry),
             usdcToken,
             paxgToken,
+            ethUsdPriceFeed,
+            paxgUsdPriceFeed,
             msg.sender, // treasury address
             msg.sender  // initial owner
         );

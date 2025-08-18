@@ -1,22 +1,14 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.24;
 
-// import {Test, console} from "forge-std/Test.sol";
-// import {VERTGovernanceToken} from "../src/VERTGovernanceToken.sol";
-// import {IdentityRegistry} from "../src/IdentityRegistry.sol";
-// import {DonationHandler} from "../src/DonationHandler.sol";
-// import {WAGAGovernor} from "../src/WAGAGovernor.sol";
-// import {WAGATimelock} from "../src/WAGATimelock.sol";
-// import {DeployWAGADAO} from "../script/DeployWAGADAO.s.sol";
-// import {HelperConfig} from "../script/HelperConfig.s.sol";
-// import {ERC20Mock} from "@openzeppelin/contracts/mocks/token/ERC20Mock.sol";
+import {Test} from "forge-std/Test.sol";
 
-// /**
-//  * @title WAGADAOTest
-//  * @notice Comprehensive test suite for the WAGA DAO system
-//  * @dev Tests all core functionality including governance, donations, and identity management for regenerative coffee projects
-//  */
-// contract WAGADAOTest is Test {
+/**
+ * @title WAGADAOTest
+ * @notice Comprehensive test suite for the WAGA DAO system - CURRENTLY DISABLED
+ * @dev Tests all core functionality including governance, donations, and identity management for regenerative coffee projects
+ */
+contract WAGADAOTest is Test {
 //     /* -------------------------------------------------------------------------- */
 //     /*                               STATE VARIABLES                              */
 //     /* -------------------------------------------------------------------------- */
@@ -397,4 +389,4 @@ pragma solidity ^0.8.24;
 //         identityRegistry.registerIdentity(donorUSDC);
 //         identityRegistry.registerIdentity(donorPAXG);
 //     }
-// }
+}

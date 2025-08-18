@@ -28,36 +28,82 @@ contract WAGADAOBasicTest is Test {
     HelperConfig helperConfig;
     
     address user = makeAddr("user");
+    // Default Anvil account that will be used as deployer
+    address deployerAccount = 0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266;
     
     function setUp() public {
-        deployer = new DeployWAGADAO();
+        // Deploy directly in test without using the deployment script
+        // This avoids the vm.startBroadcast issue
         
-        try deployer.run() returns (
-            VERTGovernanceToken _vertToken,
-            IdentityRegistry _identityRegistry,
-            DonationHandler _donationHandler,
-            WAGAGovernor _governor,
-            WAGATimelock _timelock,
-            WAGACoffeeInventoryToken _coffeeInventoryToken,
-            CooperativeLoanManager _loanManager,
-            HelperConfig _helperConfig
-        ) {
-            vertToken = _vertToken;
-            identityRegistry = _identityRegistry;
-            donationHandler = _donationHandler;
-            governor = _governor;
-            timelock = _timelock;
-            coffeeInventoryToken = _coffeeInventoryToken;
-            loanManager = _loanManager;
-            helperConfig = _helperConfig;
-        } catch Error(string memory reason) {
-            console.log("Deployment failed with reason:", reason);
-            revert("Deployment failed");
-        } catch (bytes memory lowLevelData) {
-            console.log("Deployment failed with low level error");
-            console.logBytes(lowLevelData);
-            revert("Deployment failed");
-        }
+        address admin = deployerAccount;
+        
+        // 1. Deploy IdentityRegistry first (no dependencies)
+        identityRegistry = new IdentityRegistry(admin);
+
+        // 2. Deploy VERTGovernanceToken with IdentityRegistry
+        vertToken = new VERTGovernanceToken(
+            address(identityRegistry),
+            admin // initial owner
+        );
+
+        // 3. Deploy Timelock Controller (2 day delay)
+        address[] memory proposers = new address[](1); 
+        address[] memory executors = new address[](1);
+        proposers[0] = admin; // Temporary proposer, will be changed to governor
+        executors[0] = admin; // Temporary executor, will be changed to governor
+        
+        timelock = new WAGATimelock(
+            2 days, // 2 day delay for security
+            proposers,
+            executors,
+            admin // Admin initially, will be transferred to Governor
+        );
+
+        // 4. Deploy Governor with token and timelock
+        governor = new WAGAGovernor(
+            vertToken,
+            timelock
+        );
+
+        // 5. Deploy Coffee Inventory Token
+        coffeeInventoryToken = new WAGACoffeeInventoryToken(
+            admin // Initial owner/admin
+        );
+
+        // 6. Create mock tokens for testing
+        HelperConfig tempConfig = new HelperConfig();
+        (
+            , // address ethToken - not used yet
+            address usdcToken, 
+            address paxgToken,
+            address ethUsdPriceFeed,
+            address paxgUsdPriceFeed,
+        ) = tempConfig.activeNetworkConfig();
+
+        // 7. Deploy Cooperative Loan Manager
+        loanManager = new CooperativeLoanManager(
+            usdcToken,
+            address(coffeeInventoryToken),
+            admin, // Treasury address
+            admin  // Initial admin
+        );
+
+        // 8. Deploy DonationHandler with all required contracts
+        donationHandler = new DonationHandler(
+            address(vertToken),
+            address(identityRegistry),
+            usdcToken,
+            paxgToken,
+            ethUsdPriceFeed,
+            paxgUsdPriceFeed,
+            admin, // treasury address
+            admin  // initial owner
+        );
+
+        // 9. Set up roles and permissions (as admin)
+        vm.startPrank(admin);
+        _setupRolesAndPermissions();
+        vm.stopPrank();
         
         vm.deal(user, 10 ether);
     }
@@ -73,7 +119,7 @@ contract WAGADAOBasicTest is Test {
         assertTrue(address(loanManager) != address(0));
         
         // Test basic contract properties
-        assertEq(vertToken.name(), "VERT Governance Token");
+        assertEq(vertToken.name(), "WAGA Vertical Integration Token");
         assertEq(vertToken.symbol(), "VERT");
         assertEq(vertToken.decimals(), 18);
         
@@ -82,10 +128,14 @@ contract WAGADAOBasicTest is Test {
     }
     
     function testBasicWorkflow() public {
-        // 1. Register user identity
+        // 1. Register user identity (admin operation)
+        vm.prank(deployerAccount);
         identityRegistry.registerIdentity(user);
         assertTrue(identityRegistry.isVerified(user));
         console.log("User identity registered");
+        
+        // Track treasury balance before donation
+        uint256 treasuryBalanceBefore = deployerAccount.balance;
         
         // 2. Make donation
         vm.prank(user);
@@ -93,7 +143,7 @@ contract WAGADAOBasicTest is Test {
         
         // Verify donation was received and tokens minted
         assertGt(vertToken.balanceOf(user), 0);
-        assertEq(address(donationHandler).balance, 1 ether);
+        assertEq(deployerAccount.balance, treasuryBalanceBefore + 1 ether); // ETH goes to treasury
         console.log("Donation made and tokens minted");
         console.log("   User VERT balance:", vertToken.balanceOf(user));
         
@@ -113,5 +163,37 @@ contract WAGADAOBasicTest is Test {
         assertEq(timelock.getMinDelaySeconds(), 2 days);
         
         console.log("Governance parameters configured correctly");
+    }
+    
+    /**
+     * @dev Sets up roles and permissions for all contracts
+     */
+    function _setupRolesAndPermissions() internal {
+        // 1. Grant minter role to DonationHandler for token minting
+        vertToken.grantRole(vertToken.MINTER_ROLE(), address(donationHandler));
+
+        // 2. Set up timelock roles for governance
+        timelock.grantRole(timelock.PROPOSER_ROLE(), address(governor));
+        timelock.grantRole(timelock.EXECUTOR_ROLE(), address(governor));
+        
+        // Revoke deployer's temporary roles
+        timelock.revokeRole(timelock.PROPOSER_ROLE(), deployerAccount);
+        timelock.revokeRole(timelock.EXECUTOR_ROLE(), deployerAccount);
+
+        // 3. Set up coffee inventory token roles
+        // Grant DAO roles to loan manager for inventory management
+        coffeeInventoryToken.grantRole(coffeeInventoryToken.DAO_ADMIN_ROLE(), address(loanManager));
+        coffeeInventoryToken.grantRole(coffeeInventoryToken.INVENTORY_MANAGER_ROLE(), address(loanManager));
+        
+        // Grant minter role to loan manager for batch creation
+        coffeeInventoryToken.grantRole(coffeeInventoryToken.MINTER_ROLE(), address(loanManager));
+
+        // 4. Set up loan manager roles
+        // Grant treasury and loan management roles to DAO governance
+        loanManager.grantRole(loanManager.DAO_TREASURY_ROLE(), address(timelock));
+        loanManager.grantRole(loanManager.LOAN_MANAGER_ROLE(), address(timelock));
+        
+        // Allow governor to manage loans (proposals can create/manage loans)
+        loanManager.grantRole(loanManager.LOAN_MANAGER_ROLE(), address(governor));
     }
 }

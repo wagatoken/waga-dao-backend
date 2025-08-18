@@ -8,7 +8,9 @@ import {SafeERC20} from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol
 import {Pausable} from "@openzeppelin/contracts/utils/Pausable.sol";
 import {ReentrancyGuard} from "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
 import {Address} from "@openzeppelin/contracts/utils/Address.sol";
+import {AggregatorV3Interface} from "@chainlink/contracts/src/v0.8/shared/interfaces/AggregatorV3Interface.sol";
 import {IIdentityRegistry} from "./interfaces/IIdentityRegistry.sol";
+import {OracleLib} from "./libraries/OracleLib.sol";
 
 /**
  * @title DonationHandler
@@ -31,6 +33,8 @@ import {IIdentityRegistry} from "./interfaces/IIdentityRegistry.sol";
 contract DonationHandler is Ownable, AccessControl, Pausable, ReentrancyGuard {
     using SafeERC20 for IERC20;
     using Address for address payable;
+    using OracleLib for AggregatorV3Interface;
+    using OracleLib for AggregatorV3Interface;
     
     /* -------------------------------------------------------------------------- */
     /*                                 CONSTANTS                                  */
@@ -64,6 +68,12 @@ contract DonationHandler is Ownable, AccessControl, Pausable, ReentrancyGuard {
     
     /// @dev PAXG token contract on Base network
     IERC20 public immutable i_paxgToken;
+    
+    /// @dev Chainlink ETH/USD price feed
+    AggregatorV3Interface public immutable i_ethUsdPriceFeed;
+    
+    /// @dev Chainlink PAXG/USD price feed
+    AggregatorV3Interface public immutable i_paxgUsdPriceFeed;
     
     /// @dev Treasury address where funds are sent
     address public treasury;
@@ -182,6 +192,8 @@ contract DonationHandler is Ownable, AccessControl, Pausable, ReentrancyGuard {
      * @param _identityRegistry Address of the Identity Registry
      * @param _usdcToken Address of USDC token on Base
      * @param _paxgToken Address of PAXG token on Base
+     * @param _ethUsdPriceFeed Address of Chainlink ETH/USD price feed
+     * @param _paxgUsdPriceFeed Address of Chainlink PAXG/USD price feed
      * @param _treasury Address where donations will be sent
      * @param _initialOwner Address that will be the initial owner
      */
@@ -190,6 +202,8 @@ contract DonationHandler is Ownable, AccessControl, Pausable, ReentrancyGuard {
         address _identityRegistry,
         address _usdcToken,
         address _paxgToken,
+        address _ethUsdPriceFeed,
+        address _paxgUsdPriceFeed,
         address _treasury,
         address _initialOwner
     ) Ownable(_initialOwner) {
@@ -197,6 +211,8 @@ contract DonationHandler is Ownable, AccessControl, Pausable, ReentrancyGuard {
         require(_identityRegistry != address(0), "Invalid identity registry address");
         require(_usdcToken != address(0), "Invalid USDC token address");
         require(_paxgToken != address(0), "Invalid PAXG token address");
+        require(_ethUsdPriceFeed != address(0), "Invalid ETH/USD price feed address");
+        require(_paxgUsdPriceFeed != address(0), "Invalid PAXG/USD price feed address");
         require(_treasury != address(0), "Invalid treasury address");
         require(_initialOwner != address(0), "Invalid initial owner address");
         
@@ -204,6 +220,8 @@ contract DonationHandler is Ownable, AccessControl, Pausable, ReentrancyGuard {
         i_identityRegistry = IIdentityRegistry(_identityRegistry);
         i_usdcToken = IERC20(_usdcToken);
         i_paxgToken = IERC20(_paxgToken);
+        i_ethUsdPriceFeed = AggregatorV3Interface(_ethUsdPriceFeed);
+        i_paxgUsdPriceFeed = AggregatorV3Interface(_paxgUsdPriceFeed);
         treasury = _treasury;
         
         // Grant roles to initial owner
@@ -233,13 +251,16 @@ contract DonationHandler is Ownable, AccessControl, Pausable, ReentrancyGuard {
     function receiveEthDonation() external payable whenNotPaused nonReentrant {
         if (msg.value == 0) revert ZeroDonationAmount();
         if (!i_identityRegistry.isVerified(msg.sender)) revert DonorNotVerified(msg.sender);
-        if (ethPriceUsd == 0 || vertPerUsd == 0) revert InvalidConversionRate();
+        if (vertPerUsd == 0) revert InvalidConversionRate();
+        
+        // Get current ETH price from Chainlink (with stale price check)
+        uint256 currentEthPrice = i_ethUsdPriceFeed.getPriceWith18Decimals();
         
         // Calculate USD value of ETH donation
-        uint256 usdValue = (msg.value * ethPriceUsd) / TOKEN_BASE;
+        uint256 usdValue = (msg.value * currentEthPrice) / TOKEN_BASE;
         
-        // Calculate VERT tokens to mint
-        uint256 vertToMint = (usdValue * vertPerUsd) / RATE_PRECISION;
+        // Calculate VERT tokens to mint (convert to 18 decimals for proper token amount)
+        uint256 vertToMint = (usdValue * vertPerUsd * 1e12) / RATE_PRECISION;
         
         // Update tracking
         totalDonations.ethTotal += msg.value;
@@ -253,7 +274,7 @@ contract DonationHandler is Ownable, AccessControl, Pausable, ReentrancyGuard {
         // Transfer ETH to treasury
         payable(treasury).sendValue(msg.value);
         
-        emit EthDonationReceived(msg.sender, msg.value, vertToMint, ethPriceUsd);
+        emit EthDonationReceived(msg.sender, msg.value, vertToMint, currentEthPrice);
     }
     
     /**
@@ -278,8 +299,8 @@ contract DonationHandler is Ownable, AccessControl, Pausable, ReentrancyGuard {
         // Calculate USD value (USDC typically has 6 decimals)
         uint256 usdValue = (_amount * usdcPriceUsd) / 1e6;
         
-        // Calculate VERT tokens to mint
-        uint256 vertToMint = (usdValue * vertPerUsd) / RATE_PRECISION;
+        // Calculate VERT tokens to mint (convert to 18 decimals for proper token amount)
+        uint256 vertToMint = (usdValue * vertPerUsd * 1e12) / RATE_PRECISION;
         
         // Update tracking
         totalDonations.usdcTotal += _amount;
@@ -309,17 +330,20 @@ contract DonationHandler is Ownable, AccessControl, Pausable, ReentrancyGuard {
     function receivePaxgDonation(uint256 _amount) external whenNotPaused nonReentrant {
         if (_amount == 0) revert ZeroDonationAmount();
         if (!i_identityRegistry.isVerified(msg.sender)) revert DonorNotVerified(msg.sender);
-        if (paxgPriceUsd == 0 || vertPerUsd == 0) revert InvalidConversionRate();
+        if (vertPerUsd == 0) revert InvalidConversionRate();
         
         // Check allowance
         uint256 allowance = i_paxgToken.allowance(msg.sender, address(this));
         if (allowance < _amount) revert InsufficientAllowance(_amount, allowance);
         
-        // Calculate USD value (PAXG typically has 18 decimals)
-        uint256 usdValue = (_amount * paxgPriceUsd) / TOKEN_BASE;
+        // Get current PAXG price from Chainlink (with stale price check)
+        uint256 currentPaxgPrice = i_paxgUsdPriceFeed.getPriceWith18Decimals();
         
-        // Calculate VERT tokens to mint
-        uint256 vertToMint = (usdValue * vertPerUsd) / RATE_PRECISION;
+        // Calculate USD value (PAXG typically has 18 decimals)
+        uint256 usdValue = (_amount * currentPaxgPrice) / TOKEN_BASE;
+        
+        // Calculate VERT tokens to mint (convert to 18 decimals for proper token amount)
+        uint256 vertToMint = (usdValue * vertPerUsd * 1e12) / RATE_PRECISION;
         
         // Update tracking
         totalDonations.paxgTotal += _amount;
@@ -333,7 +357,7 @@ contract DonationHandler is Ownable, AccessControl, Pausable, ReentrancyGuard {
         // Mint VERT tokens to donor
         _mintTokens(msg.sender, vertToMint);
         
-        emit PaxgDonationReceived(msg.sender, _amount, vertToMint, paxgPriceUsd);
+        emit PaxgDonationReceived(msg.sender, _amount, vertToMint, currentPaxgPrice);
     }
     
     /**
@@ -360,8 +384,8 @@ contract DonationHandler is Ownable, AccessControl, Pausable, ReentrancyGuard {
         // Convert cents to USD value (assuming fiat is pegged to USD or converted)
         uint256 usdValue = (_fiatAmountCents * RATE_PRECISION) / 100;
         
-        // Calculate VERT tokens to mint
-        uint256 vertToMint = (usdValue * vertPerUsd) / RATE_PRECISION;
+        // Calculate VERT tokens to mint (convert to 18 decimals for proper token amount)
+        uint256 vertToMint = (usdValue * vertPerUsd * 1e12) / RATE_PRECISION;
         
         // Update tracking
         totalDonations.fiatTotal += _fiatAmountCents;
@@ -491,9 +515,10 @@ contract DonationHandler is Ownable, AccessControl, Pausable, ReentrancyGuard {
      * @return vertAmount Amount of VERT tokens that would be minted
      */
     function calculateVertForEth(uint256 ethAmount) external view returns (uint256 vertAmount) {
-        if (ethPriceUsd == 0 || vertPerUsd == 0) return 0;
-        uint256 usdValue = (ethAmount * ethPriceUsd) / TOKEN_BASE;
-        return (usdValue * vertPerUsd) / RATE_PRECISION;
+        if (vertPerUsd == 0) return 0;
+        uint256 currentEthPrice = i_ethUsdPriceFeed.getPriceWith18Decimals();
+        uint256 usdValue = (ethAmount * currentEthPrice) / TOKEN_BASE;
+        return (usdValue * vertPerUsd * 1e12) / RATE_PRECISION;
     }
     
     /**
@@ -504,7 +529,7 @@ contract DonationHandler is Ownable, AccessControl, Pausable, ReentrancyGuard {
     function calculateVertForUsdc(uint256 usdcAmount) external view returns (uint256 vertAmount) {
         if (usdcPriceUsd == 0 || vertPerUsd == 0) return 0;
         uint256 usdValue = (usdcAmount * usdcPriceUsd) / 1e6;
-        return (usdValue * vertPerUsd) / RATE_PRECISION;
+        return (usdValue * vertPerUsd * 1e12) / RATE_PRECISION;
     }
     
     /**
@@ -513,9 +538,10 @@ contract DonationHandler is Ownable, AccessControl, Pausable, ReentrancyGuard {
      * @return vertAmount Amount of VERT tokens that would be minted
      */
     function calculateVertForPaxg(uint256 paxgAmount) external view returns (uint256 vertAmount) {
-        if (paxgPriceUsd == 0 || vertPerUsd == 0) return 0;
-        uint256 usdValue = (paxgAmount * paxgPriceUsd) / TOKEN_BASE;
-        return (usdValue * vertPerUsd) / RATE_PRECISION;
+        if (vertPerUsd == 0) return 0;
+        uint256 currentPaxgPrice = i_paxgUsdPriceFeed.getPriceWith18Decimals();
+        uint256 usdValue = (paxgAmount * currentPaxgPrice) / TOKEN_BASE;
+        return (usdValue * vertPerUsd * 1e12) / RATE_PRECISION;
     }
     
     /**

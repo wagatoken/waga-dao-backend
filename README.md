@@ -361,16 +361,6 @@ We welcome contributions from the community! Please read our [Contributing Guide
 
 ---
 
-## 🔗 Links
-
-- **Website**: [https://lionheart-dao.org](https://lionheart-dao.org)
-- **Whitepaper**: [Project Lion Heart Whitepaper](docs/WHITEPAPER.md)
-- **Governance Portal**: [https://gov.lionheart-dao.org](https://gov.lionheart-dao.org)
-- **Discord**: [Join our community](https://discord.gg/lionheart-dao)
-- **Twitter**: [@LionHeartDAO](https://twitter.com/LionHeartDAO)
-
----
-
 ## ⚖️ Legal
 
 This project operates under Swiss law as a Verein (Association). All smart contracts are licensed under MIT License.
@@ -639,52 +629,11 @@ forge verify-contract <contract_address> <contract_name> --chain-id 8453
 
 ---
 
-## 📚 Documentation
-
-- [Technical Specification](docs/TECHNICAL_SPEC.md)
-- [Governance Guide](docs/GOVERNANCE.md)
-- [API Reference](docs/API.md)
-- [Deployment Guide](docs/DEPLOYMENT.md)
-- [Security Audit](docs/SECURITY_AUDIT.md)
-
----
-
-## 🔗 Links
-
-- **Website**: [https://lionheart-dao.org](https://lionheart-dao.org)
-- **Whitepaper**: [Project Lion Heart Whitepaper](docs/WHITEPAPER.md)
-- **Governance Portal**: [https://gov.lionheart-dao.org](https://gov.lionheart-dao.org)
-- **Discord**: [Join our community](https://discord.gg/lionheart-dao)
-- **Twitter**: [@LionHeartDAO](https://twitter.com/LionHeartDAO)
-
----
-
 ## ⚖️ Legal
 
 This project operates under Swiss law as a Verein (Association). All smart contracts are licensed under MIT License.
 
 **Disclaimer**: This is not financial advice. Please understand the risks before participating in any DeFi protocol.
 
----
-
-## 🙏 Acknowledgments
-
-- **OpenZeppelin** for secure smart contract templates
-- **Foundry** for development framework
-- **Base Network** for L2 infrastructure
-- **Swiss Legal Framework** for governance structure
-- **Cameroon Football Community** for inspiration and support
-
----
-
-## 📞 Contact
-
-For questions, partnerships, or support:
-
-- **Email**: contact@lionheart-dao.org
-- **Telegram**: [@LionHeartDAO](https://t.me/LionHeartDAO)
-- **GitHub Issues**: [Report bugs or request features](https://github.com/your-org/lion-heart-dao/issues)
-
----
 
 **Together, we build the pride of Cameroon. 🦁⚽**

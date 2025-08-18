@@ -535,23 +535,23 @@ uint256 votes = LHGT.getVotes(voterAddress);
 
 ## 📊 Project Milestones
 
-### Phase 1: Foundation (Q4 2024 - Q2 2025)
+### Phase 1: Foundation (Q3 2025 - Q3 2026)
 - ✅ Smart contract development
 - ✅ Swiss Verein establishment
 - 🔄 Fundraising campaign launch
 - 🔄 Team formation
 
-### Phase 2: Infrastructure (Q3 2025 - Q2 2026)
+### Phase 2: Infrastructure (Q4 2026 - Q1 2028)
 - 🔲 Land acquisition in Cameroon
 - 🔲 Academy construction
 - 🔲 Facility equipment
 
-### Phase 3: Operations (Q3 2026 - Q2 2027)
+### Phase 3: Operations (Q2 2028 - Q2 2029)
 - 🔲 Academy launch
 - 🔲 Professional club registration
 - 🔲 First player recruitment
 
-### Phase 4: Competition (Q3 2027+)
+### Phase 4: Competition (Q3 2029+)
 - 🔲 League participation
 - 🔲 Player development
 - 🔲 Elite One promotion

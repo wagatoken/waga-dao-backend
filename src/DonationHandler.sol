@@ -37,6 +37,28 @@ contract DonationHandler is Ownable, AccessControl, Pausable, ReentrancyGuard {
     using OracleLib for AggregatorV3Interface;
     
     /* -------------------------------------------------------------------------- */
+    /*                                 CUSTOM ERRORS                             */
+    /* -------------------------------------------------------------------------- */
+    
+    error DonationHandler__InvalidAddress_constructor();
+    error DonationHandler__InvalidRate_setConversionRates();
+    error DonationHandler__InvalidPrice_setConversionRates();
+    error DonationHandler__NoEthSent_receiveEthDonation();
+    error DonationHandler__NoUsdcSent_receiveUsdcDonation();
+    error DonationHandler__NoPaxgSent_receivePaxgDonation();
+    error DonationHandler__InvalidAmount_receiveFiatDonation();
+    error DonationHandler__InvalidDonor_receiveFiatDonation();
+    error DonationHandler__UnverifiedAddress_receiveEthDonation();
+    error DonationHandler__UnverifiedAddress_receiveUsdcDonation();
+    error DonationHandler__UnverifiedAddress_receivePaxgDonation();
+    error DonationHandler__InsufficientBalance_withdrawEth();
+    error DonationHandler__InsufficientBalance_withdrawUsdc();
+    error DonationHandler__InsufficientBalance_withdrawPaxg();
+    error DonationHandler__WithdrawalFailed_withdrawEth();
+    error DonationHandler__TransferFailed_withdrawUsdc();
+    error DonationHandler__TransferFailed_withdrawPaxg();
+    
+    /* -------------------------------------------------------------------------- */
     /*                                 CONSTANTS                                  */
     /* -------------------------------------------------------------------------- */
     
@@ -161,7 +183,7 @@ contract DonationHandler is Ownable, AccessControl, Pausable, ReentrancyGuard {
     /// @dev Emitted when funds are withdrawn to treasury
     event FundsWithdrawn(address indexed token, uint256 amount, address indexed to);
     
-    // ============ Custom Errors ============
+    // ============ Legacy Errors (for backwards compatibility) ============
     
     /// @dev Error thrown when donation amount is zero
     error ZeroDonationAmount();
@@ -207,14 +229,16 @@ contract DonationHandler is Ownable, AccessControl, Pausable, ReentrancyGuard {
         address _treasury,
         address _initialOwner
     ) Ownable(_initialOwner) {
-        require(_vertToken != address(0), "Invalid VERT token address");
-        require(_identityRegistry != address(0), "Invalid identity registry address");
-        require(_usdcToken != address(0), "Invalid USDC token address");
-        require(_paxgToken != address(0), "Invalid PAXG token address");
-        require(_ethUsdPriceFeed != address(0), "Invalid ETH/USD price feed address");
-        require(_paxgUsdPriceFeed != address(0), "Invalid PAXG/USD price feed address");
-        require(_treasury != address(0), "Invalid treasury address");
-        require(_initialOwner != address(0), "Invalid initial owner address");
+        if (_vertToken == address(0) || 
+            _identityRegistry == address(0) || 
+            _usdcToken == address(0) || 
+            _paxgToken == address(0) || 
+            _ethUsdPriceFeed == address(0) || 
+            _paxgUsdPriceFeed == address(0) || 
+            _treasury == address(0) || 
+            _initialOwner == address(0)) {
+            revert DonationHandler__InvalidAddress_constructor();
+        }
         
         i_vertToken = _vertToken;
         i_identityRegistry = IIdentityRegistry(_identityRegistry);
@@ -249,8 +273,8 @@ contract DonationHandler is Ownable, AccessControl, Pausable, ReentrancyGuard {
      * - Donation amount must be greater than 0
      */
     function receiveEthDonation() external payable whenNotPaused nonReentrant {
-        if (msg.value == 0) revert ZeroDonationAmount();
-        if (!i_identityRegistry.isVerified(msg.sender)) revert DonorNotVerified(msg.sender);
+        if (msg.value == 0) revert DonationHandler__NoEthSent_receiveEthDonation();
+        if (!i_identityRegistry.isVerified(msg.sender)) revert DonationHandler__UnverifiedAddress_receiveEthDonation();
         if (vertPerUsd == 0) revert InvalidConversionRate();
         
         // Get current ETH price from Chainlink (with stale price check)
@@ -259,8 +283,8 @@ contract DonationHandler is Ownable, AccessControl, Pausable, ReentrancyGuard {
         // Calculate USD value of ETH donation
         uint256 usdValue = (msg.value * currentEthPrice) / TOKEN_BASE;
         
-        // Calculate VERT tokens to mint (convert to 18 decimals for proper token amount)
-        uint256 vertToMint = (usdValue * vertPerUsd * 1e12) / RATE_PRECISION;
+        // Calculate VERT tokens to mint (usdValue is 18 decimals, vertPerUsd is 6 decimals)
+        uint256 vertToMint = (usdValue * vertPerUsd) / RATE_PRECISION;
         
         // Update tracking
         totalDonations.ethTotal += msg.value;
@@ -288,8 +312,8 @@ contract DonationHandler is Ownable, AccessControl, Pausable, ReentrancyGuard {
      * - Donation amount must be greater than 0
      */
     function receiveUsdcDonation(uint256 _amount) external whenNotPaused nonReentrant {
-        if (_amount == 0) revert ZeroDonationAmount();
-        if (!i_identityRegistry.isVerified(msg.sender)) revert DonorNotVerified(msg.sender);
+        if (_amount == 0) revert DonationHandler__NoUsdcSent_receiveUsdcDonation();
+        if (!i_identityRegistry.isVerified(msg.sender)) revert DonationHandler__UnverifiedAddress_receiveUsdcDonation();
         if (usdcPriceUsd == 0 || vertPerUsd == 0) revert InvalidConversionRate();
         
         // Check allowance
@@ -328,8 +352,8 @@ contract DonationHandler is Ownable, AccessControl, Pausable, ReentrancyGuard {
      * - Donation amount must be greater than 0
      */
     function receivePaxgDonation(uint256 _amount) external whenNotPaused nonReentrant {
-        if (_amount == 0) revert ZeroDonationAmount();
-        if (!i_identityRegistry.isVerified(msg.sender)) revert DonorNotVerified(msg.sender);
+        if (_amount == 0) revert DonationHandler__NoPaxgSent_receivePaxgDonation();
+        if (!i_identityRegistry.isVerified(msg.sender)) revert DonationHandler__UnverifiedAddress_receivePaxgDonation();
         if (vertPerUsd == 0) revert InvalidConversionRate();
         
         // Check allowance
@@ -342,8 +366,8 @@ contract DonationHandler is Ownable, AccessControl, Pausable, ReentrancyGuard {
         // Calculate USD value (PAXG typically has 18 decimals)
         uint256 usdValue = (_amount * currentPaxgPrice) / TOKEN_BASE;
         
-        // Calculate VERT tokens to mint (convert to 18 decimals for proper token amount)
-        uint256 vertToMint = (usdValue * vertPerUsd * 1e12) / RATE_PRECISION;
+        // Calculate VERT tokens to mint (usdValue is 18 decimals, vertPerUsd is 6 decimals)
+        uint256 vertToMint = (usdValue * vertPerUsd) / RATE_PRECISION;
         
         // Update tracking
         totalDonations.paxgTotal += _amount;
@@ -432,10 +456,10 @@ contract DonationHandler is Ownable, AccessControl, Pausable, ReentrancyGuard {
         uint256 _usdcPriceUsd,
         uint256 _paxgPriceUsd
     ) external onlyRole(RATE_MANAGER_ROLE) {
-        require(_vertPerUsd > 0, "Invalid VERT rate");
-        require(_ethPriceUsd > 0, "Invalid ETH price");
-        require(_usdcPriceUsd > 0, "Invalid USDC price");
-        require(_paxgPriceUsd > 0, "Invalid PAXG price");
+        if (_vertPerUsd == 0) revert DonationHandler__InvalidRate_setConversionRates();
+        if (_ethPriceUsd == 0 || _usdcPriceUsd == 0 || _paxgPriceUsd == 0) {
+            revert DonationHandler__InvalidPrice_setConversionRates();
+        }
         
         vertPerUsd = _vertPerUsd;
         ethPriceUsd = _ethPriceUsd;
@@ -518,7 +542,7 @@ contract DonationHandler is Ownable, AccessControl, Pausable, ReentrancyGuard {
         if (vertPerUsd == 0) return 0;
         uint256 currentEthPrice = i_ethUsdPriceFeed.getPriceWith18Decimals();
         uint256 usdValue = (ethAmount * currentEthPrice) / TOKEN_BASE;
-        return (usdValue * vertPerUsd * 1e12) / RATE_PRECISION;
+        return (usdValue * vertPerUsd) / RATE_PRECISION;
     }
     
     /**
@@ -541,7 +565,7 @@ contract DonationHandler is Ownable, AccessControl, Pausable, ReentrancyGuard {
         if (vertPerUsd == 0) return 0;
         uint256 currentPaxgPrice = i_paxgUsdPriceFeed.getPriceWith18Decimals();
         uint256 usdValue = (paxgAmount * currentPaxgPrice) / TOKEN_BASE;
-        return (usdValue * vertPerUsd * 1e12) / RATE_PRECISION;
+        return (usdValue * vertPerUsd) / RATE_PRECISION;
     }
     
     /**

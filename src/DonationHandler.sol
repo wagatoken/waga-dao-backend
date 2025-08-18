@@ -212,7 +212,8 @@ contract DonationHandler is Ownable, AccessControl, Pausable, ReentrancyGuard {
         _grantRole(TREASURER_ROLE, _initialOwner);
         
         // Set initial conversion rates (these should be updated immediately after deployment)
-        lhgtPerUsd = 10 * RATE_PRECISION; // 10 LHGT per USD initially
+        // Rate: 1 LHGT = $1 USD, so 1 LHGT per USD
+        lhgtPerUsd = 1 * RATE_PRECISION; // 1 LHGT per USD (1,000,000 with 6 decimals precision)
         ethPriceUsd = 3000 * RATE_PRECISION; // $3000 per ETH initially
         usdcPriceUsd = 1 * RATE_PRECISION; // $1 per USDC
         paxgPriceUsd = 2000 * RATE_PRECISION; // $2000 per PAXG initially

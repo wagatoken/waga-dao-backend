@@ -259,12 +259,16 @@ forge coverage
 
 ### Supported Currencies
 
-| Currency | Rate (LHGT per unit) | Network | Decimals |
-|----------|---------------------|---------|----------|
-| ETH      | 1,000              | Base    | 18       |
-| USDC     | 500                | Base    | 6        |
-| PAXG     | 100                | Base    | 18       |
-| Fiat     | 1,000              | Off-chain | 18     |
+**Rate Structure**: 1 LHGT = $1 USD equivalent
+
+| Currency | LHGT per unit | USD Value Example | Network | Decimals |
+|----------|---------------|------------------|---------|----------|
+| ETH      | 3,000         | 1 ETH ≈ $3,000   | Base    | 18       |
+| USDC     | 1             | 1 USDC = $1      | Base    | 6        |
+| PAXG     | 2,000         | 1 PAXG ≈ $2,000  | Base    | 18       |
+| Fiat     | 1             | 1 USD = $1       | Off-chain | 18     |
+
+*Note: Actual rates are dynamic and updated by rate managers based on current market prices*
 
 ### Donation Process
 1. **KYC Verification**: User must be registered in IdentityRegistry
@@ -272,6 +276,13 @@ forge coverage
 3. **Donation Execution**: Call appropriate donation function
 4. **Token Minting**: LHGT automatically minted to donor
 5. **Treasury Forwarding**: Funds forwarded to treasury
+
+### Rate Calculation Examples
+With 1 LHGT = $1 USD:
+- **ETH at $3,000**: 1 ETH = 3,000 LHGT tokens (3000 ÷ 1)
+- **USDC at $1**: 1 USDC = 1 LHGT token (1 ÷ 1)
+- **PAXG at $2,000**: 1 PAXG = 2,000 LHGT tokens (2000 ÷ 1)
+- **Fiat at $1**: $1 USD = 1 LHGT token (1 ÷ 1)
 
 ---
 

@@ -12,12 +12,12 @@ import {IIdentityRegistry} from "./interfaces/IIdentityRegistry.sol";
 
 /**
  * @title DonationHandler
- * @dev Contract for handling multi-currency donations and minting LHGT tokens
- * @author Lion Heart Football Centre DAO
+ * @dev Contract for handling multi-currency donations and minting VERT tokens
+ * @author WAGA DAO - Regenerative Coffee Global Impact
  * 
- * This contract serves as the entry point for donations to the Lion Heart DAO.
+ * This contract serves as the entry point for donations to WAGA DAO.
  * It accepts donations in multiple currencies (ETH, USDC, PAXG, and fiat) and
- * mints corresponding LHGT governance tokens to verified donors.
+ * mints corresponding VERT governance tokens to verified donors.
  * 
  * Features:
  * - Multi-currency donation support (ETH, USDC, PAXG, fiat)
@@ -26,6 +26,7 @@ import {IIdentityRegistry} from "./interfaces/IIdentityRegistry.sol";
  * - Emergency pause functionality
  * - Transparent event logging
  * - Gas-optimized operations
+ * - Support for regenerative agriculture funding
  */
 contract DonationHandler is Ownable, AccessControl, Pausable, ReentrancyGuard {
     using SafeERC20 for IERC20;
@@ -47,13 +48,13 @@ contract DonationHandler is Ownable, AccessControl, Pausable, ReentrancyGuard {
     /// @dev Precision for conversion rate calculations (6 decimals)
     uint256 public constant RATE_PRECISION = 1e6;
     
-    /// @dev Base amount for token calculations (LHGT has 18 decimals)
+    /// @dev Base amount for token calculations (VERT has 18 decimals)
     uint256 public constant TOKEN_BASE = 1e18;
     
     // ============ State Variables ============
     
-    /// @dev The Lion Heart Governance Token contract
-    address public immutable i_lhgtToken;
+    /// @dev The WAGA Vertical Integration Token (VERT) contract
+    address public immutable i_vertToken;
     
     /// @dev The Identity Registry contract
     IIdentityRegistry public immutable i_identityRegistry;
@@ -69,8 +70,8 @@ contract DonationHandler is Ownable, AccessControl, Pausable, ReentrancyGuard {
     
     // ============ Conversion Rates (tokens per USD with 6 decimal precision) ============
     
-    /// @dev LHGT tokens per 1 USD (with RATE_PRECISION decimals)
-    uint256 public lhgtPerUsd;
+    /// @dev VERT tokens per 1 USD (with RATE_PRECISION decimals)
+    uint256 public vertPerUsd;
     
     /// @dev ETH price in USD (with RATE_PRECISION decimals)
     uint256 public ethPriceUsd;
@@ -89,7 +90,7 @@ contract DonationHandler is Ownable, AccessControl, Pausable, ReentrancyGuard {
         uint256 usdcTotal;
         uint256 paxgTotal;
         uint256 fiatTotal; // In USD cents
-        uint256 lhgtMinted;
+        uint256 vertMinted;
     }
     
     /// @dev Global donation totals
@@ -98,7 +99,7 @@ contract DonationHandler is Ownable, AccessControl, Pausable, ReentrancyGuard {
     /// @dev Individual donor contributions (donor => currency => amount)
     mapping(address => mapping(string => uint256)) public donorContributions;
     
-    /// @dev Individual donor LHGT tokens received
+    /// @dev Individual donor VERT tokens received
     mapping(address => uint256) public donorTokensReceived;
     
     // ============ Events ============
@@ -107,7 +108,7 @@ contract DonationHandler is Ownable, AccessControl, Pausable, ReentrancyGuard {
     event EthDonationReceived(
         address indexed donor, 
         uint256 ethAmount, 
-        uint256 lhgtMinted, 
+        uint256 vertMinted, 
         uint256 ethPriceUsed
     );
     
@@ -115,7 +116,7 @@ contract DonationHandler is Ownable, AccessControl, Pausable, ReentrancyGuard {
     event UsdcDonationReceived(
         address indexed donor, 
         uint256 usdcAmount, 
-        uint256 lhgtMinted, 
+        uint256 vertMinted, 
         uint256 usdcPriceUsed
     );
     
@@ -123,7 +124,7 @@ contract DonationHandler is Ownable, AccessControl, Pausable, ReentrancyGuard {
     event PaxgDonationReceived(
         address indexed donor, 
         uint256 paxgAmount, 
-        uint256 lhgtMinted, 
+        uint256 vertMinted, 
         uint256 paxgPriceUsed
     );
     
@@ -131,13 +132,13 @@ contract DonationHandler is Ownable, AccessControl, Pausable, ReentrancyGuard {
     event FiatDonationRecorded(
         address indexed donor, 
         uint256 fiatAmountCents, 
-        uint256 lhgtMinted, 
+        uint256 vertMinted, 
         string currency
     );
     
     /// @dev Emitted when conversion rates are updated
     event ConversionRatesUpdated(
-        uint256 lhgtPerUsd,
+        uint256 vertPerUsd,
         uint256 ethPriceUsd,
         uint256 usdcPriceUsd,
         uint256 paxgPriceUsd,
@@ -177,7 +178,7 @@ contract DonationHandler is Ownable, AccessControl, Pausable, ReentrancyGuard {
     
     /**
      * @dev Constructor that initializes the donation handler
-     * @param _lhgtToken Address of the Lion Heart Governance Token
+     * @param _vertToken Address of the WAGA Vertical Integration Token (VERT)
      * @param _identityRegistry Address of the Identity Registry
      * @param _usdcToken Address of USDC token on Base
      * @param _paxgToken Address of PAXG token on Base
@@ -185,21 +186,21 @@ contract DonationHandler is Ownable, AccessControl, Pausable, ReentrancyGuard {
      * @param _initialOwner Address that will be the initial owner
      */
     constructor(
-        address _lhgtToken,
+        address _vertToken,
         address _identityRegistry,
         address _usdcToken,
         address _paxgToken,
         address _treasury,
         address _initialOwner
     ) Ownable(_initialOwner) {
-        require(_lhgtToken != address(0), "Invalid LHGT token address");
+        require(_vertToken != address(0), "Invalid VERT token address");
         require(_identityRegistry != address(0), "Invalid identity registry address");
         require(_usdcToken != address(0), "Invalid USDC token address");
         require(_paxgToken != address(0), "Invalid PAXG token address");
         require(_treasury != address(0), "Invalid treasury address");
         require(_initialOwner != address(0), "Invalid initial owner address");
         
-        i_lhgtToken = _lhgtToken;
+        i_vertToken = _vertToken;
         i_identityRegistry = IIdentityRegistry(_identityRegistry);
         i_usdcToken = IERC20(_usdcToken);
         i_paxgToken = IERC20(_paxgToken);
@@ -212,8 +213,8 @@ contract DonationHandler is Ownable, AccessControl, Pausable, ReentrancyGuard {
         _grantRole(TREASURER_ROLE, _initialOwner);
         
         // Set initial conversion rates (these should be updated immediately after deployment)
-        // Rate: 1 LHGT = $1 USD, so 1 LHGT per USD
-        lhgtPerUsd = 1 * RATE_PRECISION; // 1 LHGT per USD (1,000,000 with 6 decimals precision)
+        // Rate: 1 VERT = $1 USD, so 1 VERT per USD
+        vertPerUsd = 1 * RATE_PRECISION; // 1 VERT per USD (1,000,000 with 6 decimals precision)
         ethPriceUsd = 3000 * RATE_PRECISION; // $3000 per ETH initially
         usdcPriceUsd = 1 * RATE_PRECISION; // $1 per USDC
         paxgPriceUsd = 2000 * RATE_PRECISION; // $2000 per PAXG initially
@@ -222,7 +223,7 @@ contract DonationHandler is Ownable, AccessControl, Pausable, ReentrancyGuard {
     // ============ Donation Functions ============
     
     /**
-     * @dev Receives ETH donations and mints LHGT tokens
+     * @dev Receives ETH donations and mints VERT tokens
      * 
      * Requirements:
      * - Donor must be verified in identity registry
@@ -232,31 +233,31 @@ contract DonationHandler is Ownable, AccessControl, Pausable, ReentrancyGuard {
     function receiveEthDonation() external payable whenNotPaused nonReentrant {
         if (msg.value == 0) revert ZeroDonationAmount();
         if (!i_identityRegistry.isVerified(msg.sender)) revert DonorNotVerified(msg.sender);
-        if (ethPriceUsd == 0 || lhgtPerUsd == 0) revert InvalidConversionRate();
+        if (ethPriceUsd == 0 || vertPerUsd == 0) revert InvalidConversionRate();
         
         // Calculate USD value of ETH donation
         uint256 usdValue = (msg.value * ethPriceUsd) / TOKEN_BASE;
         
-        // Calculate LHGT tokens to mint
-        uint256 lhgtToMint = (usdValue * lhgtPerUsd) / RATE_PRECISION;
+        // Calculate VERT tokens to mint
+        uint256 vertToMint = (usdValue * vertPerUsd) / RATE_PRECISION;
         
         // Update tracking
         totalDonations.ethTotal += msg.value;
-        totalDonations.lhgtMinted += lhgtToMint;
+        totalDonations.vertMinted += vertToMint;
         donorContributions[msg.sender]["ETH"] += msg.value;
-        donorTokensReceived[msg.sender] += lhgtToMint;
+        donorTokensReceived[msg.sender] += vertToMint;
         
-        // Mint LHGT tokens to donor
-        _mintTokens(msg.sender, lhgtToMint);
+        // Mint VERT tokens to donor
+        _mintTokens(msg.sender, vertToMint);
         
         // Transfer ETH to treasury
         payable(treasury).sendValue(msg.value);
         
-        emit EthDonationReceived(msg.sender, msg.value, lhgtToMint, ethPriceUsd);
+        emit EthDonationReceived(msg.sender, msg.value, vertToMint, ethPriceUsd);
     }
     
     /**
-     * @dev Receives USDC donations and mints LHGT tokens
+     * @dev Receives USDC donations and mints VERT tokens
      * @param _amount Amount of USDC to donate (in USDC decimals, typically 6)
      * 
      * Requirements:
@@ -268,7 +269,7 @@ contract DonationHandler is Ownable, AccessControl, Pausable, ReentrancyGuard {
     function receiveUsdcDonation(uint256 _amount) external whenNotPaused nonReentrant {
         if (_amount == 0) revert ZeroDonationAmount();
         if (!i_identityRegistry.isVerified(msg.sender)) revert DonorNotVerified(msg.sender);
-        if (usdcPriceUsd == 0 || lhgtPerUsd == 0) revert InvalidConversionRate();
+        if (usdcPriceUsd == 0 || vertPerUsd == 0) revert InvalidConversionRate();
         
         // Check allowance
         uint256 allowance = i_usdcToken.allowance(msg.sender, address(this));
@@ -277,26 +278,26 @@ contract DonationHandler is Ownable, AccessControl, Pausable, ReentrancyGuard {
         // Calculate USD value (USDC typically has 6 decimals)
         uint256 usdValue = (_amount * usdcPriceUsd) / 1e6;
         
-        // Calculate LHGT tokens to mint
-        uint256 lhgtToMint = (usdValue * lhgtPerUsd) / RATE_PRECISION;
+        // Calculate VERT tokens to mint
+        uint256 vertToMint = (usdValue * vertPerUsd) / RATE_PRECISION;
         
         // Update tracking
         totalDonations.usdcTotal += _amount;
-        totalDonations.lhgtMinted += lhgtToMint;
+        totalDonations.vertMinted += vertToMint;
         donorContributions[msg.sender]["USDC"] += _amount;
-        donorTokensReceived[msg.sender] += lhgtToMint;
+        donorTokensReceived[msg.sender] += vertToMint;
         
         // Transfer USDC from donor to treasury
         i_usdcToken.safeTransferFrom(msg.sender, treasury, _amount);
         
-        // Mint LHGT tokens to donor
-        _mintTokens(msg.sender, lhgtToMint);
+        // Mint VERT tokens to donor
+        _mintTokens(msg.sender, vertToMint);
         
-        emit UsdcDonationReceived(msg.sender, _amount, lhgtToMint, usdcPriceUsd);
+        emit UsdcDonationReceived(msg.sender, _amount, vertToMint, usdcPriceUsd);
     }
     
     /**
-     * @dev Receives PAXG donations and mints LHGT tokens
+     * @dev Receives PAXG donations and mints VERT tokens
      * @param _amount Amount of PAXG to donate (in PAXG decimals, typically 18)
      * 
      * Requirements:
@@ -308,7 +309,7 @@ contract DonationHandler is Ownable, AccessControl, Pausable, ReentrancyGuard {
     function receivePaxgDonation(uint256 _amount) external whenNotPaused nonReentrant {
         if (_amount == 0) revert ZeroDonationAmount();
         if (!i_identityRegistry.isVerified(msg.sender)) revert DonorNotVerified(msg.sender);
-        if (paxgPriceUsd == 0 || lhgtPerUsd == 0) revert InvalidConversionRate();
+        if (paxgPriceUsd == 0 || vertPerUsd == 0) revert InvalidConversionRate();
         
         // Check allowance
         uint256 allowance = i_paxgToken.allowance(msg.sender, address(this));
@@ -317,26 +318,26 @@ contract DonationHandler is Ownable, AccessControl, Pausable, ReentrancyGuard {
         // Calculate USD value (PAXG typically has 18 decimals)
         uint256 usdValue = (_amount * paxgPriceUsd) / TOKEN_BASE;
         
-        // Calculate LHGT tokens to mint
-        uint256 lhgtToMint = (usdValue * lhgtPerUsd) / RATE_PRECISION;
+        // Calculate VERT tokens to mint
+        uint256 vertToMint = (usdValue * vertPerUsd) / RATE_PRECISION;
         
         // Update tracking
         totalDonations.paxgTotal += _amount;
-        totalDonations.lhgtMinted += lhgtToMint;
+        totalDonations.vertMinted += vertToMint;
         donorContributions[msg.sender]["PAXG"] += _amount;
-        donorTokensReceived[msg.sender] += lhgtToMint;
+        donorTokensReceived[msg.sender] += vertToMint;
         
         // Transfer PAXG from donor to treasury
         i_paxgToken.safeTransferFrom(msg.sender, treasury, _amount);
         
-        // Mint LHGT tokens to donor
-        _mintTokens(msg.sender, lhgtToMint);
+        // Mint VERT tokens to donor
+        _mintTokens(msg.sender, vertToMint);
         
-        emit PaxgDonationReceived(msg.sender, _amount, lhgtToMint, paxgPriceUsd);
+        emit PaxgDonationReceived(msg.sender, _amount, vertToMint, paxgPriceUsd);
     }
     
     /**
-     * @dev Records fiat donations and mints LHGT tokens (off-chain donations)
+     * @dev Records fiat donations and mints VERT tokens (off-chain donations)
      * @param _donor Address of the donor (must be verified)
      * @param _fiatAmountCents Amount donated in fiat currency (in cents)
      * @param _currency Currency code (e.g., "USD", "EUR", "CHF")
@@ -354,36 +355,36 @@ contract DonationHandler is Ownable, AccessControl, Pausable, ReentrancyGuard {
     ) external onlyRole(FIAT_MANAGER_ROLE) whenNotPaused nonReentrant {
         if (_fiatAmountCents == 0) revert ZeroDonationAmount();
         if (!i_identityRegistry.isVerified(_donor)) revert DonorNotVerified(_donor);
-        if (lhgtPerUsd == 0) revert InvalidConversionRate();
+        if (vertPerUsd == 0) revert InvalidConversionRate();
         
         // Convert cents to USD value (assuming fiat is pegged to USD or converted)
         uint256 usdValue = (_fiatAmountCents * RATE_PRECISION) / 100;
         
-        // Calculate LHGT tokens to mint
-        uint256 lhgtToMint = (usdValue * lhgtPerUsd) / RATE_PRECISION;
+        // Calculate VERT tokens to mint
+        uint256 vertToMint = (usdValue * vertPerUsd) / RATE_PRECISION;
         
         // Update tracking
         totalDonations.fiatTotal += _fiatAmountCents;
-        totalDonations.lhgtMinted += lhgtToMint;
+        totalDonations.vertMinted += vertToMint;
         donorContributions[_donor][_currency] += _fiatAmountCents;
-        donorTokensReceived[_donor] += lhgtToMint;
+        donorTokensReceived[_donor] += vertToMint;
         
-        // Mint LHGT tokens to donor
-        _mintTokens(_donor, lhgtToMint);
+        // Mint VERT tokens to donor
+        _mintTokens(_donor, vertToMint);
         
-        emit FiatDonationRecorded(_donor, _fiatAmountCents, lhgtToMint, _currency);
+        emit FiatDonationRecorded(_donor, _fiatAmountCents, vertToMint, _currency);
     }
     
     // ============ Internal Functions ============
     
     /**
-     * @dev Internal function to mint LHGT tokens
+     * @dev Internal function to mint VERT tokens
      * @param to Address to mint tokens to
      * @param amount Amount of tokens to mint
      */
     function _mintTokens(address to, uint256 amount) internal {
-        // Call the mint function on the LHGT token contract
-        (bool success, ) = i_lhgtToken.call(
+        // Call the mint function on the VERT token contract
+        (bool success, ) = i_vertToken.call(
             abi.encodeWithSignature("mint(address,uint256)", to, amount)
         );
         if (!success) revert TokenTransferFailed();
@@ -393,7 +394,7 @@ contract DonationHandler is Ownable, AccessControl, Pausable, ReentrancyGuard {
     
     /**
      * @dev Updates conversion rates
-     * @param _lhgtPerUsd LHGT tokens per USD (with RATE_PRECISION)
+     * @param _vertPerUsd VERT tokens per USD (with RATE_PRECISION)
      * @param _ethPriceUsd ETH price in USD (with RATE_PRECISION)
      * @param _usdcPriceUsd USDC price in USD (with RATE_PRECISION)
      * @param _paxgPriceUsd PAXG price in USD (with RATE_PRECISION)
@@ -402,22 +403,22 @@ contract DonationHandler is Ownable, AccessControl, Pausable, ReentrancyGuard {
      * - Caller must have RATE_MANAGER_ROLE
      */
     function setConversionRates(
-        uint256 _lhgtPerUsd,
+        uint256 _vertPerUsd,
         uint256 _ethPriceUsd,
         uint256 _usdcPriceUsd,
         uint256 _paxgPriceUsd
     ) external onlyRole(RATE_MANAGER_ROLE) {
-        require(_lhgtPerUsd > 0, "Invalid LHGT rate");
+        require(_vertPerUsd > 0, "Invalid VERT rate");
         require(_ethPriceUsd > 0, "Invalid ETH price");
         require(_usdcPriceUsd > 0, "Invalid USDC price");
         require(_paxgPriceUsd > 0, "Invalid PAXG price");
         
-        lhgtPerUsd = _lhgtPerUsd;
+        vertPerUsd = _vertPerUsd;
         ethPriceUsd = _ethPriceUsd;
         usdcPriceUsd = _usdcPriceUsd;
         paxgPriceUsd = _paxgPriceUsd;
         
-        emit ConversionRatesUpdated(_lhgtPerUsd, _ethPriceUsd, _usdcPriceUsd, _paxgPriceUsd, msg.sender);
+        emit ConversionRatesUpdated(_vertPerUsd, _ethPriceUsd, _usdcPriceUsd, _paxgPriceUsd, msg.sender);
     }
     
     /**
@@ -485,36 +486,36 @@ contract DonationHandler is Ownable, AccessControl, Pausable, ReentrancyGuard {
     // ============ View Functions ============
     
     /**
-     * @dev Calculate LHGT tokens for a given ETH amount
+     * @dev Calculate VERT tokens for a given ETH amount
      * @param ethAmount Amount of ETH
-     * @return lhgtAmount Amount of LHGT tokens that would be minted
+     * @return vertAmount Amount of VERT tokens that would be minted
      */
-    function calculateLhgtForEth(uint256 ethAmount) external view returns (uint256 lhgtAmount) {
-        if (ethPriceUsd == 0 || lhgtPerUsd == 0) return 0;
+    function calculateVertForEth(uint256 ethAmount) external view returns (uint256 vertAmount) {
+        if (ethPriceUsd == 0 || vertPerUsd == 0) return 0;
         uint256 usdValue = (ethAmount * ethPriceUsd) / TOKEN_BASE;
-        return (usdValue * lhgtPerUsd) / RATE_PRECISION;
+        return (usdValue * vertPerUsd) / RATE_PRECISION;
     }
     
     /**
-     * @dev Calculate LHGT tokens for a given USDC amount
+     * @dev Calculate VERT tokens for a given USDC amount
      * @param usdcAmount Amount of USDC
-     * @return lhgtAmount Amount of LHGT tokens that would be minted
+     * @return vertAmount Amount of VERT tokens that would be minted
      */
-    function calculateLhgtForUsdc(uint256 usdcAmount) external view returns (uint256 lhgtAmount) {
-        if (usdcPriceUsd == 0 || lhgtPerUsd == 0) return 0;
+    function calculateVertForUsdc(uint256 usdcAmount) external view returns (uint256 vertAmount) {
+        if (usdcPriceUsd == 0 || vertPerUsd == 0) return 0;
         uint256 usdValue = (usdcAmount * usdcPriceUsd) / 1e6;
-        return (usdValue * lhgtPerUsd) / RATE_PRECISION;
+        return (usdValue * vertPerUsd) / RATE_PRECISION;
     }
     
     /**
-     * @dev Calculate LHGT tokens for a given PAXG amount
+     * @dev Calculate VERT tokens for a given PAXG amount
      * @param paxgAmount Amount of PAXG
-     * @return lhgtAmount Amount of LHGT tokens that would be minted
+     * @return vertAmount Amount of VERT tokens that would be minted
      */
-    function calculateLhgtForPaxg(uint256 paxgAmount) external view returns (uint256 lhgtAmount) {
-        if (paxgPriceUsd == 0 || lhgtPerUsd == 0) return 0;
+    function calculateVertForPaxg(uint256 paxgAmount) external view returns (uint256 vertAmount) {
+        if (paxgPriceUsd == 0 || vertPerUsd == 0) return 0;
         uint256 usdValue = (paxgAmount * paxgPriceUsd) / TOKEN_BASE;
-        return (usdValue * lhgtPerUsd) / RATE_PRECISION;
+        return (usdValue * vertPerUsd) / RATE_PRECISION;
     }
     
     /**
@@ -523,7 +524,7 @@ contract DonationHandler is Ownable, AccessControl, Pausable, ReentrancyGuard {
      * @return ethContributed Total ETH contributed
      * @return usdcContributed Total USDC contributed
      * @return paxgContributed Total PAXG contributed
-     * @return tokensReceived Total LHGT tokens received
+     * @return tokensReceived Total VERT tokens received
      */
     function getDonorSummary(address donor) 
         external 

@@ -155,7 +155,7 @@ contract DeployWAGADAO is Script {
         coffeeInventoryToken.grantRole(coffeeInventoryToken.DAO_ADMIN_ROLE(), address(loanManager));
         coffeeInventoryToken.grantRole(coffeeInventoryToken.INVENTORY_MANAGER_ROLE(), address(loanManager));
         
-        // Grant minter role to loan manager for creating batch tokens
+        // Grant minter role to loan manager for batch creation
         coffeeInventoryToken.grantRole(coffeeInventoryToken.MINTER_ROLE(), address(loanManager));
 
         // 4. Set up loan manager roles

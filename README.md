@@ -489,13 +489,6 @@ This project operates under Swiss law as a Verein (Association). All smart contr
 
 ---
 
-## 🙏 Acknowledgments
-
-- **OpenZeppelin** for secure smart contract templates
-- **Foundry** for development framework
-- **Base Network** for L2 infrastructure
-- **Swiss Legal Framework** for governance structure
-- **African Coffee Cooperatives** for inspiration and partnership
 
 ---
 
@@ -503,9 +496,8 @@ This project operates under Swiss law as a Verein (Association). All smart contr
 
 For questions, partnerships, or support:
 
-- **Email**: contact@waga-dao.org
-- **Telegram**: [@WAGADAO](https://t.me/WAGADAO)
-- **GitHub Issues**: [Report bugs or request features](https://github.com/your-org/waga-dao-backend/issues)
+- **Email**: team@wagatoken.io
+
 
 ---
 

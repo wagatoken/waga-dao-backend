@@ -9,31 +9,33 @@ import {Pausable} from "@openzeppelin/contracts/utils/Pausable.sol";
 import {ReentrancyGuard} from "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
 import {Address} from "@openzeppelin/contracts/utils/Address.sol";
 import {AggregatorV3Interface} from "@chainlink/contracts/src/v0.8/shared/interfaces/AggregatorV3Interface.sol";
-import {IIdentityRegistry} from "./interfaces/IIdentityRegistry.sol";
-import {OracleLib} from "./libraries/OracleLib.sol";
+import {CCIPReceiver} from "@chainlink/contracts-ccip/src/v0.8/ccip/applications/CCIPReceiver.sol";
+import {Client} from "@chainlink/contracts-ccip/src/v0.8/ccip/libraries/Client.sol";
+import {IIdentityRegistry} from "../shared/interfaces/IIdentityRegistry.sol";
+import {OracleLib} from "../libraries/OracleLib.sol";
 
 /**
- * @title DonationHandler
- * @dev Contract for handling multi-currency donations and minting VERT tokens
+ * @title DonationHandler (Enhanced Multi-Chain)
+ * @dev Contract for handling multi-currency donations with CCIP support
  * @author WAGA DAO - Regenerative Coffee Global Impact
  * 
- * This contract serves as the entry point for donations to WAGA DAO.
- * It accepts donations in multiple currencies (ETH, USDC, PAXG, and fiat) and
- * mints corresponding VERT governance tokens to verified donors.
+ * This contract serves as the Base network hub for donations to WAGA DAO.
+ * It accepts direct donations (ETH, USDC, fiat) and receives cross-chain
+ * PAXG donations from Ethereum via Chainlink CCIP.
  * 
  * Features:
- * - Multi-currency donation support (ETH, USDC, PAXG, fiat)
- * - Dynamic conversion rates for fair token distribution
+ * - Multi-currency donation support (ETH, USDC direct + PAXG via CCIP)
+ * - Cross-chain PAXG donation processing via Chainlink CCIP
+ * - Dynamic conversion rates with real-time price feeds
  * - ERC-3643 compliance (only verified addresses can receive tokens)
+ * - Source chain validation for security
  * - Emergency pause functionality
  * - Transparent event logging
- * - Gas-optimized operations
- * - Support for regenerative agriculture funding
+ * - Support for regenerative coffee agriculture funding
  */
-contract DonationHandler is Ownable, AccessControl, Pausable, ReentrancyGuard {
+contract DonationHandler is Ownable, AccessControl, Pausable, ReentrancyGuard, CCIPReceiver {
     using SafeERC20 for IERC20;
     using Address for address payable;
-    using OracleLib for AggregatorV3Interface;
     using OracleLib for AggregatorV3Interface;
     
     /* -------------------------------------------------------------------------- */
@@ -45,18 +47,16 @@ contract DonationHandler is Ownable, AccessControl, Pausable, ReentrancyGuard {
     error DonationHandler__InvalidPrice_setConversionRates();
     error DonationHandler__NoEthSent_receiveEthDonation();
     error DonationHandler__NoUsdcSent_receiveUsdcDonation();
-    error DonationHandler__NoPaxgSent_receivePaxgDonation();
     error DonationHandler__InvalidAmount_receiveFiatDonation();
     error DonationHandler__InvalidDonor_receiveFiatDonation();
     error DonationHandler__UnverifiedAddress_receiveEthDonation();
     error DonationHandler__UnverifiedAddress_receiveUsdcDonation();
-    error DonationHandler__UnverifiedAddress_receivePaxgDonation();
     error DonationHandler__InsufficientBalance_withdrawEth();
     error DonationHandler__InsufficientBalance_withdrawUsdc();
-    error DonationHandler__InsufficientBalance_withdrawPaxg();
     error DonationHandler__WithdrawalFailed_withdrawEth();
     error DonationHandler__TransferFailed_withdrawUsdc();
-    error DonationHandler__TransferFailed_withdrawPaxg();
+    error DonationHandler__InvalidSourceChain_ccipReceive();
+    error DonationHandler__InvalidMessageData_ccipReceive();
     
     /* -------------------------------------------------------------------------- */
     /*                                 CONSTANTS                                  */
@@ -88,17 +88,17 @@ contract DonationHandler is Ownable, AccessControl, Pausable, ReentrancyGuard {
     /// @dev USDC token contract on Base network
     IERC20 public immutable i_usdcToken;
     
-    /// @dev PAXG token contract on Base network
-    IERC20 public immutable i_paxgToken;
-    
-    /// @dev Chainlink ETH/USD price feed
+    /// @dev Chainlink ETH/USD price feed (for ETH donations on Base)
     AggregatorV3Interface public immutable i_ethUsdPriceFeed;
     
-    /// @dev Chainlink PAXG/USD price feed
-    AggregatorV3Interface public immutable i_paxgUsdPriceFeed;
+    /// @dev Chainlink XAU/USD price feed (for PAXG which tracks gold)
+    AggregatorV3Interface public immutable i_xauUsdPriceFeed;
     
     /// @dev Treasury address where funds are sent
     address public treasury;
+    
+    /// @dev Mapping of allowed source chains for CCIP messages
+    mapping(uint64 => bool) public allowedSourceChains;
     
     // ============ Conversion Rates (tokens per USD with 6 decimal precision) ============
     
@@ -152,13 +152,25 @@ contract DonationHandler is Ownable, AccessControl, Pausable, ReentrancyGuard {
         uint256 usdcPriceUsed
     );
     
-    /// @dev Emitted when PAXG donation is received
+    /// @dev Emitted when PAXG donation is received via CCIP
     event PaxgDonationReceived(
         address indexed donor, 
         uint256 paxgAmount, 
         uint256 vertMinted, 
-        uint256 paxgPriceUsed
+        uint256 xauPriceUsed,
+        uint64 sourceChain
     );
+
+    /// @dev Emitted when CCIP message is received
+    event CCIPMessageReceived(
+        bytes32 indexed messageId,
+        uint64 indexed sourceChainSelector,
+        address sender,
+        bytes data
+    );
+
+    /// @dev Emitted when source chain allowance is updated
+    event SourceChainUpdated(uint64 indexed chainSelector, bool allowed);
     
     /// @dev Emitted when fiat donation is recorded
     event FiatDonationRecorded(
@@ -209,13 +221,13 @@ contract DonationHandler is Ownable, AccessControl, Pausable, ReentrancyGuard {
     // ============ Constructor ============
     
     /**
-     * @dev Constructor that initializes the donation handler
+     * @dev Constructor that initializes the donation handler with CCIP support
      * @param _vertToken Address of the WAGA Vertical Integration Token (VERT)
      * @param _identityRegistry Address of the Identity Registry
      * @param _usdcToken Address of USDC token on Base
-     * @param _paxgToken Address of PAXG token on Base
      * @param _ethUsdPriceFeed Address of Chainlink ETH/USD price feed
-     * @param _paxgUsdPriceFeed Address of Chainlink PAXG/USD price feed
+     * @param _xauUsdPriceFeed Address of Chainlink XAU/USD price feed (for PAXG)
+     * @param _ccipRouter Address of Chainlink CCIP router
      * @param _treasury Address where donations will be sent
      * @param _initialOwner Address that will be the initial owner
      */
@@ -223,18 +235,21 @@ contract DonationHandler is Ownable, AccessControl, Pausable, ReentrancyGuard {
         address _vertToken,
         address _identityRegistry,
         address _usdcToken,
-        address _paxgToken,
         address _ethUsdPriceFeed,
-        address _paxgUsdPriceFeed,
+        address _xauUsdPriceFeed,
+        address _ccipRouter,
         address _treasury,
         address _initialOwner
-    ) Ownable(_initialOwner) {
+    ) 
+        Ownable(_initialOwner) 
+        CCIPReceiver(_ccipRouter)
+    {
         if (_vertToken == address(0) || 
             _identityRegistry == address(0) || 
             _usdcToken == address(0) || 
-            _paxgToken == address(0) || 
             _ethUsdPriceFeed == address(0) || 
-            _paxgUsdPriceFeed == address(0) || 
+            _xauUsdPriceFeed == address(0) || 
+            _ccipRouter == address(0) ||
             _treasury == address(0) || 
             _initialOwner == address(0)) {
             revert DonationHandler__InvalidAddress_constructor();
@@ -243,9 +258,8 @@ contract DonationHandler is Ownable, AccessControl, Pausable, ReentrancyGuard {
         i_vertToken = _vertToken;
         i_identityRegistry = IIdentityRegistry(_identityRegistry);
         i_usdcToken = IERC20(_usdcToken);
-        i_paxgToken = IERC20(_paxgToken);
         i_ethUsdPriceFeed = AggregatorV3Interface(_ethUsdPriceFeed);
-        i_paxgUsdPriceFeed = AggregatorV3Interface(_paxgUsdPriceFeed);
+        i_xauUsdPriceFeed = AggregatorV3Interface(_xauUsdPriceFeed);
         treasury = _treasury;
         
         // Grant roles to initial owner
@@ -260,6 +274,83 @@ contract DonationHandler is Ownable, AccessControl, Pausable, ReentrancyGuard {
         ethPriceUsd = 3000 * RATE_PRECISION; // $3000 per ETH initially
         usdcPriceUsd = 1 * RATE_PRECISION; // $1 per USDC
         paxgPriceUsd = 2000 * RATE_PRECISION; // $2000 per PAXG initially
+    }
+    
+    // ============ CCIP Functions ============
+    
+    /**
+     * @dev Called by the CCIP router when a message is received from another chain
+     * @param any2EvmMessage The CCIP message containing donor address and PAXG amount
+     */
+    function _ccipReceive(Client.Any2EVMMessage memory any2EvmMessage) internal override {
+        // Validate source chain is allowed
+        if (!allowedSourceChains[any2EvmMessage.sourceChainSelector]) {
+            revert DonationHandler__InvalidSourceChain_ccipReceive();
+        }
+        
+        // Decode message data (donor address and PAXG amount)
+        (address donor, uint256 paxgAmount) = abi.decode(any2EvmMessage.data, (address, uint256));
+        
+        // Process the PAXG donation
+        _processPaxgDonation(donor, paxgAmount, any2EvmMessage.sourceChainSelector);
+        
+        // Emit CCIP message received event
+        emit CCIPMessageReceived(
+            any2EvmMessage.messageId,
+            any2EvmMessage.sourceChainSelector,
+            abi.decode(any2EvmMessage.sender, (address)),
+            any2EvmMessage.data
+        );
+    }
+    
+    /**
+     * @dev Process PAXG donation received via CCIP
+     * @param donor Address of the donor on the destination chain
+     * @param paxgAmount Amount of PAXG donated
+     * @param sourceChain Chain selector of the source chain
+     */
+    function _processPaxgDonation(address donor, uint256 paxgAmount, uint64 sourceChain) internal {
+        if (paxgAmount == 0) revert DonationHandler__InvalidMessageData_ccipReceive();
+        if (!i_identityRegistry.isVerified(donor)) revert DonorNotVerified(donor);
+        if (vertPerUsd == 0) revert InvalidConversionRate();
+        
+        // Get current XAU (gold) price from Chainlink
+        // PAXG tracks the price of gold, so we use XAU/USD price feed
+        uint256 currentXauPrice = i_xauUsdPriceFeed.getPriceWith18Decimals();
+        
+        // Calculate USD value of PAXG donation (PAXG has 18 decimals, price is 18 decimals)
+        uint256 usdValue = (paxgAmount * currentXauPrice) / TOKEN_BASE;
+        
+        // Calculate VERT tokens to mint (usdValue is 18 decimals, vertPerUsd is 6 decimals)
+        uint256 vertToMint = (usdValue * vertPerUsd) / RATE_PRECISION;
+        
+        // Mint VERT tokens to the donor
+        _mintTokens(donor, vertToMint);
+        
+        // Track donation totals and contributions
+        totalDonations.paxgTotal += paxgAmount;
+        totalDonations.vertMinted += vertToMint;
+        donorContributions[donor]["PAXG"] += paxgAmount;
+        donorTokensReceived[donor] += vertToMint;
+        
+        emit PaxgDonationReceived(donor, paxgAmount, vertToMint, currentXauPrice, sourceChain);
+    }
+    
+    /**
+     * @dev Set allowed source chains for CCIP messages
+     * @param chainSelector Chain selector to allow/disallow
+     * @param allowed Whether the chain is allowed
+     */
+    function setCCIPConfig(uint64 chainSelector, bool allowed) external onlyOwner {
+        allowedSourceChains[chainSelector] = allowed;
+        emit SourceChainUpdated(chainSelector, allowed);
+    }
+    
+    /**
+     * @dev Override supportsInterface to handle multiple inheritance
+     */
+    function supportsInterface(bytes4 interfaceId) public view override(AccessControl, CCIPReceiver) returns (bool) {
+        return super.supportsInterface(interfaceId);
     }
     
     // ============ Donation Functions ============
@@ -339,49 +430,6 @@ contract DonationHandler is Ownable, AccessControl, Pausable, ReentrancyGuard {
         _mintTokens(msg.sender, vertToMint);
         
         emit UsdcDonationReceived(msg.sender, _amount, vertToMint, usdcPriceUsd);
-    }
-    
-    /**
-     * @dev Receives PAXG donations and mints VERT tokens
-     * @param _amount Amount of PAXG to donate (in PAXG decimals, typically 18)
-     * 
-     * Requirements:
-     * - Donor must have approved this contract to spend PAXG
-     * - Donor must be verified in identity registry
-     * - Contract must not be paused
-     * - Donation amount must be greater than 0
-     */
-    function receivePaxgDonation(uint256 _amount) external whenNotPaused nonReentrant {
-        if (_amount == 0) revert DonationHandler__NoPaxgSent_receivePaxgDonation();
-        if (!i_identityRegistry.isVerified(msg.sender)) revert DonationHandler__UnverifiedAddress_receivePaxgDonation();
-        if (vertPerUsd == 0) revert InvalidConversionRate();
-        
-        // Check allowance
-        uint256 allowance = i_paxgToken.allowance(msg.sender, address(this));
-        if (allowance < _amount) revert InsufficientAllowance(_amount, allowance);
-        
-        // Get current PAXG price from Chainlink (with stale price check)
-        uint256 currentPaxgPrice = i_paxgUsdPriceFeed.getPriceWith18Decimals();
-        
-        // Calculate USD value (PAXG typically has 18 decimals)
-        uint256 usdValue = (_amount * currentPaxgPrice) / TOKEN_BASE;
-        
-        // Calculate VERT tokens to mint (usdValue is 18 decimals, vertPerUsd is 6 decimals)
-        uint256 vertToMint = (usdValue * vertPerUsd) / RATE_PRECISION;
-        
-        // Update tracking
-        totalDonations.paxgTotal += _amount;
-        totalDonations.vertMinted += vertToMint;
-        donorContributions[msg.sender]["PAXG"] += _amount;
-        donorTokensReceived[msg.sender] += vertToMint;
-        
-        // Transfer PAXG from donor to treasury
-        i_paxgToken.safeTransferFrom(msg.sender, treasury, _amount);
-        
-        // Mint VERT tokens to donor
-        _mintTokens(msg.sender, vertToMint);
-        
-        emit PaxgDonationReceived(msg.sender, _amount, vertToMint, currentPaxgPrice);
     }
     
     /**
@@ -563,8 +611,8 @@ contract DonationHandler is Ownable, AccessControl, Pausable, ReentrancyGuard {
      */
     function calculateVertForPaxg(uint256 paxgAmount) external view returns (uint256 vertAmount) {
         if (vertPerUsd == 0) return 0;
-        uint256 currentPaxgPrice = i_paxgUsdPriceFeed.getPriceWith18Decimals();
-        uint256 usdValue = (paxgAmount * currentPaxgPrice) / TOKEN_BASE;
+        uint256 currentXauPrice = i_xauUsdPriceFeed.getPriceWith18Decimals();
+        uint256 usdValue = (paxgAmount * currentXauPrice) / TOKEN_BASE;
         return (usdValue * vertPerUsd) / RATE_PRECISION;
     }
     

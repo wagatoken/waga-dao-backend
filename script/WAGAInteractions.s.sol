@@ -3,12 +3,12 @@ pragma solidity ^0.8.24;
 
 import {Script, console} from "forge-std/Script.sol";
 import {DevOpsTools} from "lib/foundry-devops/src/DevOpsTools.sol";
-import {VERTGovernanceToken} from "../src/VERTGovernanceToken.sol";
-import {IdentityRegistry} from "../src/IdentityRegistry.sol";
-import {DonationHandler} from "../src/DonationHandler.sol";
-import {WAGAGovernor} from "../src/WAGAGovernor.sol";
-import {WAGACoffeeInventoryToken} from "../src/WAGACoffeeInventoryToken.sol";
-import {CooperativeLoanManager} from "../src/CooperativeLoanManager.sol";
+import {VERTGovernanceToken} from "src/shared/VERTGovernanceToken.sol";
+import {IdentityRegistry} from "src/shared/IdentityRegistry.sol";
+import {DonationHandler} from "src/base/DonationHandler.sol";
+import {WAGAGovernor} from "src/shared/WAGAGovernor.sol";
+import {WAGACoffeeInventoryToken} from "src/shared/WAGACoffeeInventoryToken.sol";
+import {CooperativeLoanManager} from "src/base/CooperativeLoanManager.sol";
 import {ERC20Mock} from "@openzeppelin/contracts/mocks/token/ERC20Mock.sol";
 
 /**

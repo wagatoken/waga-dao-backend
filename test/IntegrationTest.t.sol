@@ -4,13 +4,13 @@ pragma solidity ^0.8.24;
 import {Test, console} from "forge-std/Test.sol";
 import {DeployWAGADAO} from "../script/DeployWAGADAO.s.sol";
 import {HelperConfig} from "../script/HelperConfig.s.sol";
-import {VERTGovernanceToken} from "../src/VERTGovernanceToken.sol";
-import {IdentityRegistry} from "../src/IdentityRegistry.sol";
-import {DonationHandler} from "../src/DonationHandler.sol";
-import {WAGAGovernor} from "../src/WAGAGovernor.sol";
-import {WAGATimelock} from "../src/WAGATimelock.sol";
-import {WAGACoffeeInventoryToken} from "../src/WAGACoffeeInventoryToken.sol";
-import {CooperativeLoanManager} from "../src/CooperativeLoanManager.sol";
+import {VERTGovernanceToken} from "../src/shared/VERTGovernanceToken.sol";
+import {IdentityRegistry} from "../src/shared/IdentityRegistry.sol";
+import {DonationHandler} from "../src/base/DonationHandler.sol";
+import {WAGAGovernor} from "../src/shared/WAGAGovernor.sol";
+import {WAGATimelock} from "../src/shared/WAGATimelock.sol";
+import {WAGACoffeeInventoryToken} from "../src/shared/WAGACoffeeInventoryToken.sol";
+import {CooperativeLoanManager} from "../src/base/CooperativeLoanManager.sol";
 import {ERC20Mock} from "@openzeppelin/contracts/mocks/token/ERC20Mock.sol";
 
 /**
@@ -60,14 +60,7 @@ contract IntegrationTest is Test {
         
         // Deploy HelperConfig to get network configuration
         HelperConfig helperConfig = new HelperConfig();
-        (
-            , // ethToken
-            address usdcTokenAddr,
-            address paxgTokenAddr,
-            address ethUsdPriceFeed,
-            address paxgUsdPriceFeed,
-            // deployerKey
-        ) = helperConfig.activeNetworkConfig();
+        HelperConfig.NetworkConfig memory config = helperConfig.getConfigByChainId(block.chainid);
         
         // Deploy core contracts manually with proper access control
         // Note: Using deployer as admin for all contracts to avoid access control issues
@@ -94,8 +87,9 @@ contract IntegrationTest is Test {
         coffeeInventoryToken = new WAGACoffeeInventoryToken(deployer);
         
         vm.prank(deployer);
+        // Deploy cooperative loan manager
         loanManager = new CooperativeLoanManager(
-            usdcTokenAddr,
+            config.usdcToken,
             address(coffeeInventoryToken),
             deployer, // treasury
             deployer  // admin
@@ -106,10 +100,10 @@ contract IntegrationTest is Test {
         donationHandler = new DonationHandler(
             address(vertToken),
             address(identityRegistry),
-            usdcTokenAddr,
-            paxgTokenAddr,
-            ethUsdPriceFeed,
-            paxgUsdPriceFeed,
+            config.usdcToken,
+            config.ethUsdPriceFeed,
+            config.xauUsdPriceFeed,
+            config.ccipRouter,
             deployer, // treasury address
             deployer  // initial owner
         );
@@ -123,8 +117,8 @@ contract IntegrationTest is Test {
         console.log("[SUCCESS] WAGA DAO system deployed successfully");
         
         // Use the same tokens that were used to deploy the contracts
-        usdcToken = ERC20Mock(usdcTokenAddr);
-        paxgToken = ERC20Mock(paxgTokenAddr);
+        usdcToken = ERC20Mock(config.usdcToken);
+        paxgToken = ERC20Mock(config.paxgToken);
         console.log("[SUCCESS] Mock tokens created for testing");
         
         // Setup test accounts with initial balances

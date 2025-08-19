@@ -2,13 +2,13 @@
 pragma solidity ^0.8.24;
 
 import {Test, console} from "forge-std/Test.sol";
-import {VERTGovernanceToken} from "../src/VERTGovernanceToken.sol";
-import {IdentityRegistry} from "../src/IdentityRegistry.sol";
-import {DonationHandler} from "../src/DonationHandler.sol";
-import {WAGAGovernor} from "../src/WAGAGovernor.sol";
-import {WAGATimelock} from "../src/WAGATimelock.sol";
-import {WAGACoffeeInventoryToken} from "../src/WAGACoffeeInventoryToken.sol";
-import {CooperativeLoanManager} from "../src/CooperativeLoanManager.sol";
+import {VERTGovernanceToken} from "../src/shared/VERTGovernanceToken.sol";
+import {IdentityRegistry} from "../src/shared/IdentityRegistry.sol";
+import {DonationHandler} from "../src/base/DonationHandler.sol";
+import {WAGAGovernor} from "../src/shared/WAGAGovernor.sol";
+import {WAGATimelock} from "../src/shared/WAGATimelock.sol";
+import {WAGACoffeeInventoryToken} from "../src/shared/WAGACoffeeInventoryToken.sol";
+import {CooperativeLoanManager} from "../src/base/CooperativeLoanManager.sol";
 import {ERC20Mock} from "@openzeppelin/contracts/mocks/token/ERC20Mock.sol";
 import {MockV3Aggregator} from "./mocks/MockV3Aggregator.sol";
 
@@ -258,14 +258,14 @@ contract WAGADAOComprehensiveTest is Test {
         uint256 initialBalance = vertToken.balanceOf(donorPAXG);
         
         vm.startPrank(donorPAXG);
-        paxgToken.approve(address(donationHandler), PAXG_DONATION_AMOUNT);
-        donationHandler.receivePaxgDonation(PAXG_DONATION_AMOUNT);
+        usdcToken.approve(address(donationHandler), PAXG_DONATION_AMOUNT);
+        donationHandler.receiveUsdcDonation(PAXG_DONATION_AMOUNT);
         vm.stopPrank();
         
-        // Check PAXG was received by treasury
-        assertEq(paxgToken.balanceOf(admin), PAXG_DONATION_AMOUNT);
+        // Check USDC was received by treasury
+        assertEq(usdcToken.balanceOf(admin), PAXG_DONATION_AMOUNT);
         
-        // Check tokens were minted (rate: 1 VERT per USD, PAXG = $2000, so 20000 VERT for 10 PAXG)
+        // Check tokens were minted (rate: 1 VERT per USD, USDC = $1, so 1000 VERT for 1000 USDC)
         uint256 expectedTokens = 20000e18; // 20000 VERT tokens (18 decimals)
         assertEq(vertToken.balanceOf(donorPAXG), initialBalance + expectedTokens);
         

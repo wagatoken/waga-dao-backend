@@ -3,15 +3,14 @@ pragma solidity ^0.8.24;
 
 import {Test, console} from "forge-std/Test.sol";
 import {DeployWAGADAO} from "../script/DeployWAGADAO.s.sol";
-import {VERTGovernanceToken} from "../src/VERTGovernanceToken.sol";
-import {IdentityRegistry} from "../src/IdentityRegistry.sol";
-import {DonationHandler} from "../src/DonationHandler.sol";
-import {WAGAGovernor} from "../src/WAGAGovernor.sol";
-import {WAGATimelock} from "../src/WAGATimelock.sol";
-import {WAGACoffeeInventoryToken} from "../src/WAGACoffeeInventoryToken.sol";
-import {CooperativeLoanManager} from "../src/CooperativeLoanManager.sol";
-import {IWAGACoffeeInventoryToken} from "../src/interfaces/IWAGACoffeeInventoryToken.sol";
-import {ICooperativeLoanManager} from "../src/interfaces/ICooperativeLoanManager.sol";
+import {VERTGovernanceToken} from "../src/shared/VERTGovernanceToken.sol";
+import {IdentityRegistry} from "../src/shared/IdentityRegistry.sol";
+import {DonationHandler} from "../src/base/DonationHandler.sol";
+import {WAGAGovernor} from "../src/shared/WAGAGovernor.sol";
+import {WAGATimelock} from "../src/shared/WAGATimelock.sol";
+import {WAGACoffeeInventoryToken} from "../src/shared/WAGACoffeeInventoryToken.sol";
+import {CooperativeLoanManager} from "../src/base/CooperativeLoanManager.sol";
+import {IWAGACoffeeInventoryToken} from "../src/shared/interfaces/IWAGACoffeeInventoryToken.sol";
 import {HelperConfig} from "../script/HelperConfig.s.sol";
 
 /**
@@ -72,19 +71,13 @@ contract WAGADAOBasicTest is Test {
             admin // Initial owner/admin
         );
 
-        // 6. Create mock tokens for testing
+        // 6. Get network configuration for testing
         HelperConfig tempConfig = new HelperConfig();
-        (
-            , // address ethToken - not used yet
-            address usdcToken, 
-            address paxgToken,
-            address ethUsdPriceFeed,
-            address paxgUsdPriceFeed,
-        ) = tempConfig.activeNetworkConfig();
+        HelperConfig.NetworkConfig memory config = tempConfig.getConfigByChainId(block.chainid);
 
         // 7. Deploy Cooperative Loan Manager
         loanManager = new CooperativeLoanManager(
-            usdcToken,
+            config.usdcToken,
             address(coffeeInventoryToken),
             admin, // Treasury address
             admin  // Initial admin
@@ -94,10 +87,10 @@ contract WAGADAOBasicTest is Test {
         donationHandler = new DonationHandler(
             address(vertToken),
             address(identityRegistry),
-            usdcToken,
-            paxgToken,
-            ethUsdPriceFeed,
-            paxgUsdPriceFeed,
+            config.usdcToken,
+            config.ethUsdPriceFeed,
+            config.xauUsdPriceFeed,
+            config.ccipRouter,
             admin, // treasury address
             admin  // initial owner
         );
@@ -218,7 +211,7 @@ contract WAGADAOBasicTest is Test {
 
         // I need to create this manually since the test is calling the contract directly
         // Convert interface struct to contract struct for direct contract call
-        WAGACoffeeInventoryToken.GreenfieldProjectParams memory contractParams = WAGACoffeeInventoryToken.GreenfieldProjectParams({
+        IWAGACoffeeInventoryToken.GreenfieldProjectParams memory contractParams = IWAGACoffeeInventoryToken.GreenfieldProjectParams({
             ipfsUri: params.ipfsUri,
             plantingDate: params.plantingDate,
             maturityDate: params.maturityDate,
@@ -308,8 +301,8 @@ contract WAGADAOBasicTest is Test {
             uint256 disbursedAmount,
             uint256 repaidAmount,
             uint256 interestRate,
-            uint256 startTime,
-            uint256 maturityTime,
+            , // startTime - unused
+            , // maturityTime - unused
             uint256[] memory batchIds,
             CooperativeLoanManager.LoanStatus status,
             string memory purpose,

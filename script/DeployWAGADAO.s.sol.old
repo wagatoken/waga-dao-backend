@@ -1,0 +1,199 @@
+// SPDX-License-Identifier: MIT
+pragma solidity ^0.8.24;
+
+import {Script} from "forge-std/Script.sol";
+import {console} from "forge-std/console.sol";
+
+// Mainnet contracts
+import {MainnetCollateralManager} from "../src/mainnet/MainnetCollateralManager.sol";
+
+// Base contracts (shared + base-specific)
+import {VERTGovernanceToken} from "../src/shared/VERTGovernanceToken.sol";
+import {IdentityRegistry} from "../src/shared/IdentityRegistry.sol";
+import {WAGAGovernor} from "../src/shared/WAGAGovernor.sol";
+import {WAGATimelock} from "../src/shared/WAGATimelock.sol";
+import {WAGACoffeeInventoryToken} from "../src/shared/WAGACoffeeInventoryToken.sol";
+import {DonationHandler} from "../src/base/DonationHandler.sol";
+import {CooperativeLoanManager} from "../src/base/CooperativeLoanManager.sol";
+
+// Arbitrum contracts
+import {ArbitrumLendingManager} from "../src/arbitrum/ArbitrumLendingManager.sol";
+
+import {HelperConfig} from "./HelperConfig.s.sol";
+
+/**
+ * @title DeployWAGADAO
+ * @notice Smart deployment script for WAGA DAO multi-chain system
+ * @dev Automatically deploys the correct contracts based on the target chain:
+ * 
+ * Ethereum Mainnet (Chain ID 1):
+ * - MainnetCollateralManager (PAXG donations via CCIP)
+ * 
+ * Base Network (Chain ID 8453):
+ * - Complete WAGA DAO ecosystem (governance, donations, coffee operations)
+ * - Enhanced DonationHandler with CCIP receiving capabilities
+ * 
+ * Arbitrum (Chain ID 42161):
+ * - ArbitrumLendingManager (USDC lending via Aave V3)
+ * 
+ * Local/Testnet:
+ * - Full ecosystem for testing and development
+ */
+contract DeployWAGADAO is Script {
+    /* -------------------------------------------------------------------------- */
+    /*                               STATE VARIABLES                              */
+    /* -------------------------------------------------------------------------- */
+    
+    HelperConfig public helperConfig;
+    
+    struct DeploymentAddresses {
+        // Mainnet contracts
+        address mainnetCollateralManager;
+        
+        // Base contracts
+        address vertGovernanceToken;
+        address coffeeInventoryToken;
+        address identityRegistry;
+        address donationHandler;
+        address cooperativeLoanManager;
+        address wagaGovernor;
+        address wagaTimelock;
+        
+        // Arbitrum contracts
+        address arbitrumLendingManager;
+    }
+    
+    /* -------------------------------------------------------------------------- */
+    /*                                MAIN FUNCTION                               */
+    /* -------------------------------------------------------------------------- */
+    
+    function run() external returns (DeploymentAddresses memory) {
+        helperConfig = new HelperConfig();
+        
+        uint256 deployerKey = vm.envUint("PRIVATE_KEY");
+        vm.startBroadcast(deployerKey);
+
+        DeploymentAddresses memory deployed;
+
+        // Deploy based on current chain
+        uint256 chainId = block.chainid;
+        
+        if (chainId == 1) {
+            // Ethereum Mainnet deployment
+            deployed = _deployMainnetContracts();
+        } else if (chainId == 8453) {
+            // Base Mainnet deployment
+            deployed = _deployBaseContracts();
+        } else if (chainId == 42161) {
+            // Arbitrum deployment
+            deployed = _deployArbitrumContracts();
+        } else {
+            // Testnet/Local deployment (full ecosystem on one chain)
+            deployed = _deployTestnetContracts();
+        }
+
+        vm.stopBroadcast();
+        
+        return deployed;
+        );
+
+        // 4. Deploy Governor with token and timelock
+        WAGAGovernor governor = new WAGAGovernor(
+            vertToken,
+            timelock
+        );
+
+        // 5. Deploy Coffee Inventory Token
+        WAGACoffeeInventoryToken coffeeInventoryToken = new WAGACoffeeInventoryToken(
+            msg.sender // Initial owner/admin
+        );
+
+        // 6. Deploy Cooperative Loan Manager
+        CooperativeLoanManager loanManager = new CooperativeLoanManager(
+            config.usdcToken,
+            address(coffeeInventoryToken),
+            msg.sender, // Treasury address
+            msg.sender  // Initial admin
+        );
+
+        // 7. Deploy DonationHandler with all required contracts (updated for CCIP)
+        DonationHandler donationHandler = new DonationHandler(
+            address(vertToken),
+            address(identityRegistry),
+            config.usdcToken,
+            config.ethUsdPriceFeed,
+            config.xauUsdPriceFeed,
+            config.ccipRouter,
+            msg.sender, // treasury address
+            msg.sender  // initial owner
+        );
+
+        // 8. Set up roles and permissions properly
+        _setupRolesAndPermissions(
+            vertToken,
+            identityRegistry,
+            donationHandler,
+            governor,
+            timelock,
+            coffeeInventoryToken,
+            loanManager
+        );
+
+        vm.stopBroadcast();
+
+        return (
+            vertToken,
+            identityRegistry,
+            donationHandler,
+            governor,
+            timelock,
+            coffeeInventoryToken,
+            loanManager,
+            helperConfig
+        );
+    }
+
+    /* -------------------------------------------------------------------------- */
+    /*                            INTERNAL FUNCTIONS                             */
+    /* -------------------------------------------------------------------------- */
+
+    /**
+     * @dev Sets up roles and permissions for all contracts
+     */
+    function _setupRolesAndPermissions(
+        VERTGovernanceToken vertToken,
+        IdentityRegistry, // identityRegistry - unused for now
+        DonationHandler donationHandler, // Used for granting minter role
+        WAGAGovernor governor,
+        WAGATimelock timelock,
+        WAGACoffeeInventoryToken coffeeInventoryToken,
+        CooperativeLoanManager loanManager
+    ) internal {
+        // 1. Grant minter role to DonationHandler for token minting
+        vertToken.grantRole(vertToken.MINTER_ROLE(), address(donationHandler));
+
+        // 2. Set up timelock roles for governance
+        timelock.grantRole(timelock.PROPOSER_ROLE(), address(governor));
+        timelock.grantRole(timelock.EXECUTOR_ROLE(), address(governor));
+        
+        // Revoke deployer's temporary roles
+        timelock.revokeRole(timelock.PROPOSER_ROLE(), msg.sender);
+        timelock.revokeRole(timelock.EXECUTOR_ROLE(), msg.sender);
+
+        // 3. Set up coffee inventory token roles
+        // Grant DAO roles to loan manager for inventory management
+        coffeeInventoryToken.grantRole(coffeeInventoryToken.DAO_ADMIN_ROLE(), address(loanManager));
+        coffeeInventoryToken.grantRole(coffeeInventoryToken.INVENTORY_MANAGER_ROLE(), address(loanManager));
+        
+        // Grant minter role to loan manager for batch creation
+        coffeeInventoryToken.grantRole(coffeeInventoryToken.MINTER_ROLE(), address(loanManager));
+
+        // 4. Set up loan manager roles
+        // Grant treasury and loan management roles to DAO governance
+        loanManager.grantRole(loanManager.DAO_TREASURY_ROLE(), address(timelock));
+        loanManager.grantRole(loanManager.LOAN_MANAGER_ROLE(), address(timelock));
+        
+        // Allow governor to manage loans (proposals can create/manage loans)
+        loanManager.grantRole(loanManager.LOAN_MANAGER_ROLE(), address(governor));
+    }
+}

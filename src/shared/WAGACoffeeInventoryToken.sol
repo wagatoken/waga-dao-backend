@@ -7,6 +7,7 @@ import {ERC1155URIStorage} from "@openzeppelin/contracts/token/ERC1155/extension
 import {AccessControl} from "@openzeppelin/contracts/access/AccessControl.sol";
 import {Pausable} from "@openzeppelin/contracts/utils/Pausable.sol";
 import {Strings} from "@openzeppelin/contracts/utils/Strings.sol";
+import {IWAGACoffeeInventoryToken} from "./interfaces/IWAGACoffeeInventoryToken.sol";
 
 /**
  * @title WAGACoffeeInventoryToken
@@ -22,7 +23,8 @@ contract WAGACoffeeInventoryToken is
     ERC1155Supply, 
     ERC1155URIStorage, 
     AccessControl, 
-    Pausable 
+    Pausable,
+    IWAGACoffeeInventoryToken 
 {
     using Strings for uint256;
 
@@ -101,51 +103,6 @@ contract WAGACoffeeInventoryToken is
 
     enum AssetType { COFFEE_BATCH, INFRASTRUCTURE_ASSET }
 
-    struct BatchInfo {
-        uint256 productionDate;      // When coffee was processed (0 for future/greenfield)
-        uint256 expiryDate;         // Quality expiry date (maturity date for greenfield)
-        uint256 currentQuantity;    // Current inventory quantity (0 for future/greenfield)
-        uint256 pricePerKg;         // Price per kilogram in USD (projected for greenfield)
-        uint256 loanValue;          // USDC loan value backing this batch
-        bool isVerified;            // Quality and quantity verified
-        bool isMetadataVerified;    // Metadata verified off-chain
-        string packagingInfo;       // Packaging details
-        string metadataHash;        // IPFS hash of detailed metadata
-        uint256 lastVerifiedTimestamp; // Last verification timestamp
-    }
-
-    struct GreenfieldInfo {
-        bool isGreenfieldProject;   // True for new cooperative formation
-        bool isFutureProduction;    // True for future production (existing or greenfield)
-        uint256 plantingDate;       // When coffee trees planted (greenfield)
-        uint256 maturityDate;       // When trees reach full production
-        uint256 projectedYield;     // Expected annual production at maturity
-        uint256 investmentStage;    // Current development stage (0-5)
-    }
-
-    struct CooperativeInfo {
-        string cooperativeName;     // Name of the cooperative
-        string location;           // Geographic location (e.g., "Bamendakwe, Cameroon")
-        address paymentAddress;    // Address for loan disbursement
-        string certifications;     // Quality certifications (e.g., "Organic, Fair Trade")
-        uint256 farmersCount;      // Number of farmers in cooperative
-    }
-    
-    struct GreenfieldProjectParams {
-        string ipfsUri;
-        uint256 plantingDate;
-        uint256 maturityDate;
-        uint256 projectedYield;
-        uint256 investmentStage;
-        uint256 pricePerKg;
-        uint256 loanValue;
-        string cooperativeName;
-        string location;
-        address paymentAddress;
-        string certifications;
-        uint256 farmersCount;
-    }
-    
     struct InfrastructureAsset {
         string assetName;               // "Coffee Processing Plant - Bamendakwe"
         string assetType;               // "Wet Processing Plant", "Drying Beds", "Storage Facility"
@@ -184,6 +141,12 @@ contract WAGACoffeeInventoryToken is
     }
 
     /* -------------------------------------------------------------------------- */
+    /*                                EVENTS                                      */
+    /* -------------------------------------------------------------------------- */
+
+    event BatchExpired(uint256 batchId);
+
+    /* -------------------------------------------------------------------------- */
     /*                                CUSTOM ERRORS                               */
     /* -------------------------------------------------------------------------- */
 
@@ -202,40 +165,6 @@ contract WAGACoffeeInventoryToken is
     error WAGACoffeeInventoryToken__InfrastructureNotOperational();
     error WAGACoffeeInventoryToken__InvalidRevenueData();
     error WAGACoffeeInventoryToken__InsufficientInfrastructureShares();
-
-    /* -------------------------------------------------------------------------- */
-    /*                                   EVENTS                                   */
-    /* -------------------------------------------------------------------------- */
-
-    event BatchCreated(
-        uint256 indexed batchId, 
-        string cooperativeName, 
-        uint256 quantity, 
-        uint256 loanValue
-    );
-    
-    event GreenfieldProjectCreated(
-        uint256 indexed projectId,
-        string cooperativeName,
-        uint256 plantingDate,
-        uint256 maturityDate,
-        uint256 projectedYield,
-        uint256 loanValue
-    );
-    
-    event GreenfieldStageAdvanced(
-        uint256 indexed projectId,
-        uint256 previousStage,
-        uint256 newStage,
-        uint256 updatedYield
-    );
-    
-    event BatchVerified(uint256 indexed batchId, address verifier);
-    event InventoryUpdated(uint256 indexed batchId, uint256 newQuantity);
-    event BatchSold(uint256 indexed batchId, uint256 quantity, address buyer);
-    event LoanRepaid(uint256 indexed batchId, uint256 amount);
-    event BatchExpired(uint256 indexed batchId);
-    event CooperativeUpdated(uint256 indexed batchId, string cooperativeName);
 
     /* -------------------------------------------------------------------------- */
     /*                                  MODIFIERS                                 */
@@ -580,6 +509,13 @@ contract WAGACoffeeInventoryToken is
      */
     function getCooperativeInfo(uint256 batchId) external view validBatchId(batchId) returns (CooperativeInfo memory) {
         return cooperativeInfo[batchId];
+    }
+
+    /**
+     * @notice Returns greenfield information for a batch
+     */
+    function getGreenfieldInfo(uint256 batchId) external view validBatchId(batchId) returns (GreenfieldInfo memory) {
+        return greenfieldInfo[batchId];
     }
 
     /**

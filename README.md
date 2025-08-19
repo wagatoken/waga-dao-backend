@@ -24,20 +24,52 @@ WAGA DAO is a revolutionary platform that combines Swiss Verein governance with 
 - Promote sustainable farming practices and ecosystem regeneration
 - **Enable 3-5 year greenfield project development** from land acquisition to full production
 
-### 🏗️ Architecture
-The project is built on seven core smart contracts deployed on the Base network:
 
+### 🏗️ Architecture & Cross-Chain Interoperability
+The project is built on a modular, cross-chain architecture leveraging Chainlink CCIP (Cross-Chain Interoperability Protocol) for secure messaging and asset transfer between EVM networks. Core contracts are deployed on the Base network, with cross-chain operations to and from Ethereum and Arbitrum.
+
+#### Key Smart Contracts
 1. **VERTGovernanceToken (VERT)** - ERC-20 governance token with ERC-3643 compliance (Vertical Integration Token)
 2. **IdentityRegistry** - KYC/AML verification system for permissioned transfers
-3. **DonationHandler** - Multi-currency donation processor and token minter
+3. **DonationHandler** - Multi-currency donation processor and token minter, with **Chainlink CCIP support for cross-chain PAXG donations** (from Ethereum) and secure source chain validation.
 4. **WAGAGovernor** - On-chain governance with proposal and voting mechanisms
 5. **WAGATimelock** - Time-delayed execution for security and governance
 6. **WAGACoffeeInventoryToken** - ERC-1155 tokens representing coffee batches and greenfield projects as loan collateral
 7. **CooperativeLoanManager** - USDC loan management for existing production and greenfield development financing
+8. **ArbitrumLendingManager** - USDC yield management and lending on Arbitrum, with **CCIP-based cross-chain governance instructions** and automated yield harvesting.
 
 ---
 
-## 🚀 Quick Start
+## � Chainlink CCIP Integration
+
+WAGA DAO leverages [Chainlink CCIP](https://chain.link/ccip) to enable secure, programmable cross-chain workflows:
+
+- **Cross-Chain PAXG Donations:**
+    - Donors can send PAXG (gold-backed token) from Ethereum to the Base network using Chainlink CCIP. The `DonationHandler` contract on Base receives and processes these donations, mints VERT tokens, and tracks cross-chain provenance.
+- **Cross-Chain Governance & Yield Management:**
+    - The `ArbitrumLendingManager` on Arbitrum receives governance instructions (e.g., yield harvesting, emergency pause) from the Base network via CCIP. This enables decentralized, on-chain control of yield strategies and fund allocation across networks.
+- **Source Chain Validation:**
+    - All CCIP-enabled contracts validate the source chain selector to prevent spoofed or unauthorized cross-chain messages.
+- **Event Logging:**
+    - All cross-chain actions are transparently logged with message IDs, source chain selectors, and payloads for auditability.
+
+**Example Cross-Chain Flows:**
+
+1. **PAXG Donation (Ethereum → Base):**
+     - Donor sends PAXG to a CCIP sender contract on Ethereum.
+     - Chainlink CCIP relays the message to `DonationHandler` on Base.
+     - `DonationHandler` validates the source, decodes donor and amount, mints VERT, and logs the event.
+
+2. **Governance Instruction (Base → Arbitrum):**
+     - DAO proposal on Base triggers a governance action (e.g., "HARVEST_YIELD").
+     - Chainlink CCIP relays the instruction to `ArbitrumLendingManager` on Arbitrum.
+     - The contract executes the instruction (e.g., harvests yield, pauses lending) and logs the cross-chain event.
+
+---
+
+---
+
+## �🚀 Quick Start
 
 ### Prerequisites
 - [Foundry](https://getfoundry.sh/) installed
@@ -108,15 +140,29 @@ function setIdentityRegistry(address newRegistry) external
 - Batch operations for efficiency
 - Pausable for emergency situations
 
-#### 💰 DonationHandler
+
+#### 💰 DonationHandler (with CCIP)
 **Location**: `src/DonationHandler.sol`
 
 **Features**:
-- Multi-currency donation support (ETH, USDC, PAXG, Fiat)
-- Dynamic conversion rates for fair token distribution
-- Automatic VERT minting upon donation
-- Transparent tracking and reporting
-- Treasury management with gold-backed reserves
+- Multi-currency donation support (ETH, USDC direct, **PAXG via Chainlink CCIP from Ethereum**)
+- Cross-chain PAXG donation processing and VERT minting
+- Dynamic conversion rates with real-time price feeds
+- ERC-3643 compliance (only verified addresses can receive tokens)
+- Source chain validation for secure cross-chain messaging
+- Emergency pause functionality
+- Transparent event logging for all cross-chain and local actions
+- Support for regenerative coffee agriculture funding
+#### 🌉 ArbitrumLendingManager (with CCIP)
+**Location**: `src/arbitrum/ArbitrumLendingManager.sol`
+
+**Features**:
+- USDC lending and yield management on Arbitrum (Aave V3)
+- **Receives governance instructions from Base via Chainlink CCIP**
+- Automated yield harvesting and emergency controls via cross-chain proposals
+- Multi-year greenfield project financing support
+- Role-based access and emergency withdrawal
+- Transparent event logging for all cross-chain and local actions
 
 #### ☕ WAGACoffeeInventoryToken
 **Location**: `src/WAGACoffeeInventoryToken.sol`

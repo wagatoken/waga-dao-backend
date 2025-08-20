@@ -4,10 +4,10 @@ pragma solidity ^0.8.24;
 /**
  * @title IIdentityRegistry
  * @dev Interface for the Identity Registry contract used for ERC-3643 compliance
- * @author Lion Heart Football Centre DAO
+ * @author WAGA Protocol
  * 
  * This interface defines the functions required for managing KYC/AML verified addresses
- * in the Lion Heart DAO ecosystem. Only addresses verified through this registry
+ * in the WAGA Protocol ecosystem. Only addresses verified through this registry
  * can participate in token transfers and governance.
  */
 interface IIdentityRegistry {

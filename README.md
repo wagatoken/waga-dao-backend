@@ -32,11 +32,12 @@ The project is built on a modular, cross-chain architecture leveraging Chainlink
 1. **VERTGovernanceToken (VERT)** - ERC-20 governance token with ERC-3643 compliance (Vertical Integration Token)
 2. **IdentityRegistry** - KYC/AML verification system for permissioned transfers
 3. **DonationHandler** - Multi-currency donation processor and token minter, with **Chainlink CCIP support for cross-chain PAXG donations** (from Ethereum) and secure source chain validation.
-4. **WAGAGovernor** - On-chain governance with proposal and voting mechanisms
-5. **WAGATimelock** - Time-delayed execution for security and governance
-6. **WAGACoffeeInventoryToken** - ERC-1155 tokens representing coffee batches and greenfield projects as loan collateral
-7. **CooperativeLoanManager** - USDC loan management for existing production and greenfield development financing
-8. **ArbitrumLendingManager** - USDC yield management and lending on Arbitrum, with **CCIP-based cross-chain governance instructions** and automated yield harvesting.
+4. **MainnetCollateralManager** - **Simplified PAXG collection and cross-chain messaging** on Ethereum mainnet, with **gas-efficient custom error handling**
+5. **WAGAGovernor** - On-chain governance with proposal and voting mechanisms
+6. **WAGATimelock** - Time-delayed execution for security and governance
+7. **WAGACoffeeInventoryToken** - ERC-1155 tokens representing coffee batches and greenfield projects as loan collateral
+8. **CooperativeLoanManager** - USDC loan management for existing production and greenfield development financing
+9. **ArbitrumLendingManager** - USDC yield management and lending on Arbitrum, with **CCIP-based cross-chain governance instructions** and automated yield harvesting.
 
 ---
 
@@ -56,9 +57,11 @@ WAGA DAO leverages [Chainlink CCIP](https://chain.link/ccip) to enable secure, p
 **Example Cross-Chain Flows:**
 
 1. **PAXG Donation (Ethereum → Base):**
-     - Donor sends PAXG to a CCIP sender contract on Ethereum.
-     - Chainlink CCIP relays the message to `DonationHandler` on Base.
+     - Donor sends PAXG to `MainnetCollateralManager` on Ethereum.
+     - **PAXG stored as gold-backed treasury reserves** on Ethereum mainnet.
+     - Chainlink CCIP relays donation message to `DonationHandler` on Base.
      - `DonationHandler` validates the source, decodes donor and amount, mints VERT, and logs the event.
+     - **No actual PAXG transferred cross-chain** - only messaging for governance token minting.
 
 2. **Governance Instruction (Base → Arbitrum):**
      - DAO proposal on Base triggers a governance action (e.g., "HARVEST_YIELD").
@@ -153,6 +156,27 @@ function setIdentityRegistry(address newRegistry) external
 - Emergency pause functionality
 - Transparent event logging for all cross-chain and local actions
 - Support for regenerative coffee agriculture funding
+
+#### 🏛️ MainnetCollateralManager (Ethereum)
+**Location**: `src/mainnet/MainnetCollateralManager.sol`
+
+**Features**:
+- **Simplified PAXG collection and storage** as gold-backed treasury reserves
+- **Cross-chain messaging only** - no actual asset transfer via CCIP
+- **Gas-efficient custom error handling** following consistent patterns
+- Real-time gold pricing via Chainlink XAU/USD price feeds
+- **Clean separation of concerns** - no cooperative allocation logic
+- KYC/AML integration for verified donors only
+- Emergency withdrawal capabilities for treasury management
+- **Focused architecture** - pure treasury reserve management on mainnet
+
+**Key Functions**:
+```solidity
+function processPaxgDonation(uint256 amount) external
+function getCurrentXauPrice() external view returns (uint256, uint256)
+function emergencyWithdraw(address token, uint256 amount, address to) external
+```
+
 #### 🌉 ArbitrumLendingManager (with CCIP)
 **Location**: `src/arbitrum/ArbitrumLendingManager.sol`
 

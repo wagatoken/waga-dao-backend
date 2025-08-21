@@ -35,6 +35,29 @@ contract MainnetCollateralManager is AccessControl, Pausable, ReentrancyGuard, C
     using SafeERC20 for IERC20;
 
     /* -------------------------------------------------------------------------- */
+    /*                                 CUSTOM ERRORS                             */
+    /* -------------------------------------------------------------------------- */
+
+    error MainnetCollateralManager__InvalidPaxgToken_constructor();
+    error MainnetCollateralManager__InvalidLinkToken_constructor();
+    error MainnetCollateralManager__InvalidPriceFeed_constructor();
+    error MainnetCollateralManager__InvalidIdentityRegistry_constructor();
+    error MainnetCollateralManager__InvalidTreasury_constructor();
+    error MainnetCollateralManager__ZeroAmount_processPaxgDonation();
+    error MainnetCollateralManager__AddressNotVerified_processPaxgDonation();
+    error MainnetCollateralManager__DestinationChainNotSet_processPaxgDonation();
+    error MainnetCollateralManager__DestinationContractNotSet_processPaxgDonation();
+    error MainnetCollateralManager__InvalidPriceFromOracle();
+    error MainnetCollateralManager__StalePriceData();
+    error MainnetCollateralManager__InsufficientLinkForFees();
+    error MainnetCollateralManager__InvalidDestinationContract_setDestinationContract();
+    error MainnetCollateralManager__InvalidTreasury_setTreasury();
+    error MainnetCollateralManager__InvalidIdentityRegistry_setIdentityRegistry();
+    error MainnetCollateralManager__InvalidTokenAddress_emergencyWithdraw();
+    error MainnetCollateralManager__InvalidDestinationAddress_emergencyWithdraw();
+    error MainnetCollateralManager__ZeroAmount_emergencyWithdraw();
+
+    /* -------------------------------------------------------------------------- */
     /*                                    ROLES                                   */
     /* -------------------------------------------------------------------------- */
     
@@ -72,12 +95,6 @@ contract MainnetCollateralManager is AccessControl, Pausable, ReentrancyGuard, C
     
     /// @dev Mapping of addresses to their PAXG contribution amounts
     mapping(address => uint256) public s_userPaxgContributions;
-    
-    /// @dev Mapping of coffee cooperative addresses to their funding needs
-    mapping(address => uint256) public s_cooperativeFundingNeeds;
-    
-    /// @dev Total funding provided to coffee cooperatives
-    uint256 public s_totalCooperativeFunding;
 
     /* -------------------------------------------------------------------------- */
     /*                                   EVENTS                                   */
@@ -88,8 +105,7 @@ contract MainnetCollateralManager is AccessControl, Pausable, ReentrancyGuard, C
         uint256 paxgAmount,
         uint256 usdValue,
         uint256 vertToMint,
-        uint256 priceUsed,
-        string cooperativeInfo
+        uint256 priceUsed
     );
     
     event CrossChainMessageSent(
@@ -104,7 +120,8 @@ contract MainnetCollateralManager is AccessControl, Pausable, ReentrancyGuard, C
     event DestinationChainUpdated(uint64 oldChain, uint64 newChain);
     event DestinationContractUpdated(address indexed oldContract, address indexed newContract);
     event CollateralWithdrawn(address indexed token, uint256 amount, address indexed to);
-    event CooperativeFundingAllocated(address indexed cooperative, uint256 amount, string purpose);
+    event SourceChainUpdated(uint64 indexed chainSelector, bool allowed);
+    event DestinationUpdated(uint64 indexed chainSelector, address indexed destination);
 
     /* -------------------------------------------------------------------------- */
     /*                                 CONSTRUCTOR                                */
@@ -130,11 +147,11 @@ contract MainnetCollateralManager is AccessControl, Pausable, ReentrancyGuard, C
         CCIPReceiver(_router) 
         OwnerIsCreator()
     {
-        require(_paxgToken != address(0), "Invalid PAXG token address");
-        require(_linkToken != address(0), "Invalid LINK token address");
-        require(_xauUsdPriceFeed != address(0), "Invalid price feed address");
-        require(_identityRegistry != address(0), "Invalid identity registry address");
-        require(_treasury != address(0), "Invalid treasury address");
+        if (_paxgToken == address(0)) revert MainnetCollateralManager__InvalidPaxgToken_constructor();
+        if (_linkToken == address(0)) revert MainnetCollateralManager__InvalidLinkToken_constructor();
+        if (_xauUsdPriceFeed == address(0)) revert MainnetCollateralManager__InvalidPriceFeed_constructor();
+        if (_identityRegistry == address(0)) revert MainnetCollateralManager__InvalidIdentityRegistry_constructor();
+        if (_treasury == address(0)) revert MainnetCollateralManager__InvalidTreasury_constructor();
 
         i_paxgToken = IERC20(_paxgToken);
         i_linkToken = IERC20(_linkToken);
@@ -153,27 +170,25 @@ contract MainnetCollateralManager is AccessControl, Pausable, ReentrancyGuard, C
     /*                              CORE FUNCTIONS                               */
     /* -------------------------------------------------------------------------- */
     
-    /**
-     * @dev Process PAXG donation for coffee cooperative financing
+        /**
+     * @dev Process PAXG donation and send cross-chain message
      * @param amount Amount of PAXG to donate
-     * @param cooperativeInfo Optional info about target cooperative or project
      */
     function processPaxgDonation(
-        uint256 amount,
-        string calldata cooperativeInfo
+        uint256 amount
     ) external nonReentrant whenNotPaused {
-        require(amount > 0, "Amount must be greater than 0");
-        require(s_identityRegistry.isVerified(msg.sender), "Address not verified");
-        require(s_destinationChainSelector != 0, "Destination chain not set");
-        require(s_destinationContract != address(0), "Destination contract not set");
+        if (amount == 0) revert MainnetCollateralManager__ZeroAmount_processPaxgDonation();
+        if (!s_identityRegistry.isVerified(msg.sender)) revert MainnetCollateralManager__AddressNotVerified_processPaxgDonation();
+        if (s_destinationChainSelector == 0) revert MainnetCollateralManager__DestinationChainNotSet_processPaxgDonation();
+        if (s_destinationContract == address(0)) revert MainnetCollateralManager__DestinationContractNotSet_processPaxgDonation();
 
         // Transfer PAXG from donor to this contract
         i_paxgToken.safeTransferFrom(msg.sender, address(this), amount);
 
         // Get current XAU/USD price for PAXG valuation
         (, int256 price, , uint256 updatedAt, ) = i_xauUsdPriceFeed.latestRoundData();
-        require(price > 0, "Invalid price from oracle");
-        require(block.timestamp - updatedAt <= 3600, "Price data too stale"); // 1 hour staleness check
+        if (price <= 0) revert MainnetCollateralManager__InvalidPriceFromOracle();
+        if (block.timestamp - updatedAt > 3600) revert MainnetCollateralManager__StalePriceData(); // 1 hour staleness check
 
         uint256 currentXauPrice = uint256(price); // Price has 8 decimals from Chainlink
 
@@ -199,8 +214,7 @@ contract MainnetCollateralManager is AccessControl, Pausable, ReentrancyGuard, C
             amount,
             usdValue,
             vertToMint,
-            currentXauPrice,
-            cooperativeInfo
+            currentXauPrice
         );
 
         emit CrossChainMessageSent(
@@ -210,33 +224,11 @@ contract MainnetCollateralManager is AccessControl, Pausable, ReentrancyGuard, C
             amount,
             messageId
         );
-
-        // If cooperative info provided, track funding allocation
-        if (bytes(cooperativeInfo).length > 0) {
-            emit CooperativeFundingAllocated(msg.sender, usdValue, cooperativeInfo);
-        }
     }
 
-    /**
-     * @dev Allocate PAXG collateral for specific cooperative funding needs
-     * @param cooperative Address of the coffee cooperative
-     * @param amount Amount of funding needed (in USD value)
-     * @param purpose Description of funding purpose (equipment, expansion, etc.)
-     */
-    function allocateCooperativeFunding(
-        address cooperative,
-        uint256 amount,
-        string calldata purpose
-    ) external onlyRole(TREASURER_ROLE) {
-        require(cooperative != address(0), "Invalid cooperative address");
-        require(amount > 0, "Amount must be greater than 0");
-        require(s_identityRegistry.isVerified(cooperative), "Cooperative not verified");
-
-        s_cooperativeFundingNeeds[cooperative] += amount;
-        s_totalCooperativeFunding += amount;
-
-        emit CooperativeFundingAllocated(cooperative, amount, purpose);
-    }
+    /* -------------------------------------------------------------------------- */
+    /*                            ADMIN FUNCTIONS                                */
+    /* -------------------------------------------------------------------------- */
 
     /**
      * @dev Send CCIP message to destination chain
@@ -264,7 +256,7 @@ contract MainnetCollateralManager is AccessControl, Pausable, ReentrancyGuard, C
         // Get the fee required to send the CCIP message
         uint256 fees = IRouterClient(i_ccipRouter).getFee(destinationChainSelector, evm2AnyMessage);
 
-        require(i_linkToken.balanceOf(address(this)) >= fees, "Insufficient LINK for fees");
+        if (i_linkToken.balanceOf(address(this)) < fees) revert MainnetCollateralManager__InsufficientLinkForFees();
 
         // Approve the router to transfer LINK tokens on our behalf
         SafeERC20.forceApprove(i_linkToken, address(i_ccipRouter), fees);
@@ -302,7 +294,7 @@ contract MainnetCollateralManager is AccessControl, Pausable, ReentrancyGuard, C
      */
     function getCurrentXauPrice() external view returns (uint256 price, uint256 updatedAt) {
         (, int256 latestPrice, , uint256 latestUpdatedAt, ) = i_xauUsdPriceFeed.latestRoundData();
-        require(latestPrice > 0, "Invalid price from oracle");
+        if (latestPrice <= 0) revert MainnetCollateralManager__InvalidPriceFromOracle();
         return (uint256(latestPrice), latestUpdatedAt);
     }
 
@@ -313,42 +305,35 @@ contract MainnetCollateralManager is AccessControl, Pausable, ReentrancyGuard, C
      */
     function calculateVertForPaxg(uint256 paxgAmount) external view returns (uint256 vertAmount) {
         (, int256 price, , , ) = i_xauUsdPriceFeed.latestRoundData();
-        require(price > 0, "Invalid price from oracle");
+        if (price <= 0) revert MainnetCollateralManager__InvalidPriceFromOracle();
         
         uint256 currentXauPrice = uint256(price);
         uint256 usdValue = (paxgAmount * currentXauPrice) / 1e8;
         return usdValue; // 1 USD = 1 VERT
     }
 
-    /**
-     * @dev Get user's contribution information
+        /**
+     * @dev Get user PAXG contribution info
      * @param user Address to query
-     * @return paxgContributed Total PAXG contributed
-     * @return fundingAllocated Total funding allocated to cooperatives
+     * @return contribution User's total PAXG contribution
      */
-    function getUserContribution(address user) external view returns (
-        uint256 paxgContributed,
-        uint256 fundingAllocated
-    ) {
-        return (s_userPaxgContributions[user], s_cooperativeFundingNeeds[user]);
+    function getUserContribution(address user) external view returns (uint256 contribution) {
+        return s_userPaxgContributions[user];
     }
 
     /**
      * @dev Get overall contract statistics
      * @return totalPaxgCollateral Total PAXG held as collateral
-     * @return totalCooperativeFunding Total funding allocated to cooperatives
      * @return contractPaxgBalance Current PAXG balance
      * @return contractLinkBalance Current LINK balance for CCIP fees
      */
     function getContractStats() external view returns (
         uint256 totalPaxgCollateral,
-        uint256 totalCooperativeFunding,
         uint256 contractPaxgBalance,
         uint256 contractLinkBalance
     ) {
         return (
             s_totalPaxgCollateral,
-            s_totalCooperativeFunding,
             i_paxgToken.balanceOf(address(this)),
             i_linkToken.balanceOf(address(this))
         );
@@ -373,7 +358,7 @@ contract MainnetCollateralManager is AccessControl, Pausable, ReentrancyGuard, C
      * @param destinationContract Contract address on target network
      */
     function setDestinationContract(address destinationContract) external onlyRole(CCIP_MANAGER_ROLE) {
-        require(destinationContract != address(0), "Invalid destination contract");
+        if (destinationContract == address(0)) revert MainnetCollateralManager__InvalidDestinationContract_setDestinationContract();
         address oldContract = s_destinationContract;
         s_destinationContract = destinationContract;
         emit DestinationContractUpdated(oldContract, destinationContract);
@@ -384,7 +369,7 @@ contract MainnetCollateralManager is AccessControl, Pausable, ReentrancyGuard, C
      * @param newTreasury New treasury address
      */
     function setTreasury(address newTreasury) external onlyRole(TREASURER_ROLE) {
-        require(newTreasury != address(0), "Invalid treasury address");
+        if (newTreasury == address(0)) revert MainnetCollateralManager__InvalidTreasury_setTreasury();
         address oldTreasury = s_treasury;
         s_treasury = newTreasury;
         emit TreasuryUpdated(oldTreasury, newTreasury);
@@ -395,7 +380,7 @@ contract MainnetCollateralManager is AccessControl, Pausable, ReentrancyGuard, C
      * @param newIdentityRegistry New identity registry address
      */
     function setIdentityRegistry(address newIdentityRegistry) external onlyRole(DEFAULT_ADMIN_ROLE) {
-        require(newIdentityRegistry != address(0), "Invalid identity registry address");
+        if (newIdentityRegistry == address(0)) revert MainnetCollateralManager__InvalidIdentityRegistry_setIdentityRegistry();
         s_identityRegistry = IIdentityRegistry(newIdentityRegistry);
     }
 
@@ -410,9 +395,9 @@ contract MainnetCollateralManager is AccessControl, Pausable, ReentrancyGuard, C
         uint256 amount,
         address to
     ) external onlyRole(TREASURER_ROLE) {
-        require(token != address(0), "Invalid token address");
-        require(to != address(0), "Invalid destination address");
-        require(amount > 0, "Amount must be greater than 0");
+        if (token == address(0)) revert MainnetCollateralManager__InvalidTokenAddress_emergencyWithdraw();
+        if (to == address(0)) revert MainnetCollateralManager__InvalidDestinationAddress_emergencyWithdraw();
+        if (amount == 0) revert MainnetCollateralManager__ZeroAmount_emergencyWithdraw();
 
         IERC20(token).safeTransfer(to, amount);
         emit CollateralWithdrawn(token, amount, to);

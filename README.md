@@ -5,39 +5,8 @@
 [![Solidity](https://img.shields.io/badge/Solidity-^0.8.24-blue.svg)](https://soliditylang.org/)
 [![Foundry](https://img.shields.io/badge/Built%20with-Foundry-orange.svg)](https://getfoundry.sh/)
 [![OpenZeppelin](https://img.shields.io/badge/OpenZeppelin-Contracts-green.svg)](https://openzeppelin.com/contracts/)
-[![License: MIT](https://img### 🧪 Testing Framework
-
-### Comprehensive Test Suite ✅
-Our testing framework ensures reliability and security through multiple testing layers with **30+ passing tests**:
-
-**Test Files**:
-- **`test/BasicTest.t.sol`** - Core functionality unit tests (5 tests)
-- **`test/BasicTestV2.t.sol`** - Enhanced V2 contract testing
-- **`test/WAGADAO.t.sol`** - Comprehensive contract integration tests (9 tests)
-- **`test/WAGADAOComprehensive.t.sol`** - Extended comprehensive testing
-- **`test/WAGADAORefactoredTest.t.sol`** - Refactored system validation
-- **`test/IntegrationTest.t.sol`** - Complete end-to-end workflow validation (4 tests)
-- **`test/ComprehensiveWorkflowTest.t.sol`** - Full value chain testing
-- **`test/GovernanceWorkflowTest.t.sol`** - Governance system validation
-- **`test/PhasedDisbursementTest.t.sol`** - **NEW: Phased disbursement comprehensive testing (5/5 tests passing)**
-
-**Phased Disbursement Testing Coverage** ✅:
-- ✅ **Disbursement schedule creation** with milestone definitions
-- ✅ **Complete phased disbursement workflow** - end-to-end testing
-- ✅ **Milestone evidence submission and validation** workflow
-- ✅ **Escrow management** with automatic balance tracking
-- ✅ **Error condition handling** and access control validation
-- ✅ **Automatic disbursement trigger** upon milestone completion
-- ✅ **Role-based access control** for validators and cooperatives
-- ✅ **Database integration readiness** with event emission testing
-
-**Greenfield Testing Coverage** ✅:
-- ✅ Greenfield project creation and management
-- ✅ 6-stage development lifecycle validation
-- ✅ Development grant creation and disbursement
-- ✅ Future production collateral validation
-- ✅ Multi-year project timeline simulatione/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
-[![Tests](https://img.shields.io/badge/Tests-30%2B%20Passing-brightgreen.svg)](#testing-framework)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+[![Tests](https://img.shields.io/badge/Tests-41%20Passing-brightgreen.svg)](#testing-framework)
 [![Integration](https://img.shields.io/badge/Integration-Complete-success.svg)](#integration-tests)
 [![Database](https://img.shields.io/badge/Database-Integrated-blue.svg)](#database-integration)
 [![Phased%20Disbursement](https://img.shields.io/badge/Phased%20Disbursement-Production%20Ready-success.svg)](#phased-disbursement-system)
@@ -46,14 +15,14 @@ Our testing framework ensures reliability and security through multiple testing 
 
 ## 📖 Overview
 
-WAGA DAO is a revolutionary platform that combines Swiss Verein governance with blockchain technology to finance regenerative coffee agriculture across African cooperatives. Our mission is to create sustainable value chains that benefit coffee farmers, preserve ecosystems, and generate transparent returns for global investors.
+WAGA DAO is a revolutionary platform that combines Swiss Verein governance with blockchain technology to finance regenerative coffee agriculture across African cooperatives through **grant-based funding**. Our mission is to create sustainable value chains that benefit coffee farmers, preserve ecosystems, and generate transparent returns for global investors.
 
 ### 🎯 Mission
-- Finance regenerative coffee agriculture through blockchain-backed loans
-- Support African coffee cooperatives with transparent, fair financing  
+- Finance regenerative coffee agriculture through **blockchain-backed grants**
+- Support African coffee cooperatives with transparent, fair funding  
 - **Support both existing and greenfield coffee cooperatives** with future production collateral
 - **Milestone-based phased disbursement** for development projects with automatic validation
-- Create gold-backed treasury reserves (PAXG/XAUT) for USDC lending
+- Create gold-backed treasury reserves (PAXG/XAUT) for **USDC grant funding**
 - Provide decentralized governance for global stakeholders
 - Promote sustainable farming practices and ecosystem regeneration
 - **Enable 3-5 year greenfield project development** from land acquisition to full production
@@ -66,24 +35,60 @@ The project is built on a modular, cross-chain architecture leveraging Chainlink
 #### Key Smart Contracts
 1. **VERTGovernanceToken (VERT)** - ERC-20 governance token with ERC-3643 compliance (Vertical Integration Token)
 2. **IdentityRegistry** - KYC/AML verification system for permissioned transfers
-3. **DonationHandler** - Multi-currency donation processor and token minter, with **Chainlink CCIP support for cross-chain PAXG donations** (from Ethereum) and secure source chain validation.
+3. **DonationHandler** - Multi-currency donation processor and token minter, with **Chainlink CCIP support for cross-chain PAXG donations** (from Ethereum) and secure source chain validation
 4. **MainnetCollateralManager** - **Simplified PAXG collection and cross-chain messaging** on Ethereum mainnet, with **gas-efficient custom error handling**
 5. **WAGAGovernor** - On-chain governance with proposal and voting mechanisms
 6. **WAGATimelock** - Time-delayed execution for security and governance
 7. **WAGACoffeeInventoryTokenV2** - Enhanced ERC-1155 tokens with database integration for coffee batches and greenfield projects
 8. **CooperativeGrantManagerV2** - **Advanced USDC grant management with phased disbursement and milestone validation**
 9. **GreenfieldProjectManager** - Dedicated greenfield project lifecycle management with 6-stage progression
-10. **ArbitrumLendingManager** - USDC yield management and lending on Arbitrum, with **CCIP-based cross-chain governance instructions** and automated yield harvesting.
+10. **ArbitrumLendingManager** - USDC yield management and treasury operations on Arbitrum, with **CCIP-based cross-chain governance instructions** and automated yield harvesting for grant funding
+
+---
+
+## 🌱 **Regenerative Finance (ReFi) Principles**
+
+WAGA DAO embodies **regenerative finance** by creating financial systems that restore and regenerate natural and social capital rather than depleting them. Our approach represents a paradigm shift from extractive to regenerative economic models:
+
+### 🌍 **Why This is Regenerative Finance:**
+
+#### **🔄 Circular Value Creation**
+- **Coffee-backed grants**: Funding is secured by actual coffee inventory and future production, creating tangible asset backing
+- **Non-extractive funding**: Coffee-collateralized grant financing eliminates debt burden while maintaining asset security
+- **Real asset backing**: ERC-1155 coffee batch tokens provide transparent, verifiable collateral for all grant funding
+- **Ecosystem restoration**: Coffee-backed funding specifically supports biodiversity enhancement, soil health improvement, and carbon sequestration
+- **Long-term thinking**: 3-5 year coffee development cycles prioritize sustainable land use over short-term profit maximization
+
+#### **⚖️ Wealth Redistribution & Social Equity**
+- **Direct farmer ownership**: Coffee cooperatives maintain full ownership of their land and production
+- **Transparent pricing**: Blockchain-based value chains ensure fair compensation for farmers
+- **Community empowerment**: Decentralized governance gives stakeholders direct decision-making power
+- **Knowledge transfer**: Greenfield projects include training and capacity building for sustainable practices
+
+#### **🌿 Environmental Regeneration**
+- **Carbon sequestration**: Coffee agroforestry systems capture and store atmospheric carbon
+- **Biodiversity enhancement**: Shade-grown coffee preserves and creates wildlife habitats
+- **Soil health**: Regenerative farming practices restore soil microbiome and fertility
+- **Water conservation**: Sustainable irrigation and watershed management practices
+
+#### **💚 Impact-First Capital Allocation**
+- **Coffee-backed milestone funding**: Phased disbursement tied to coffee production milestones ensures both environmental and economic outcomes
+- **Asset-secured evidence validation**: IPFS-based and Relatational Database proof systems verify coffee production progress and regenerative impact before fund release
+- **Coffee inventory governance**: VERT token holders make decisions based on actual coffee production and quality metrics
+- **Gold-coffee treasury backing**: Combined gold reserves and coffee inventory provide stability without speculation on essential commodities
+
+### 🎯 **ReFi Innovation:**
+WAGA's **coffee-backed phased disbursement system** ensures that capital flows only when both coffee production milestones and regenerative outcomes are demonstrated. This creates a direct three-way link between financial flows, tangible coffee asset creation, and positive environmental/social impact. Unlike traditional finance where agricultural commodities are often speculated upon, WAGA uses coffee inventory as productive collateral that grows in value through regenerative practices.
 
 ---
 
 ## 🚀 **NEW: Phased Disbursement System**
 
 ### 📋 **Milestone-Based Automatic Disbursement**
-WAGA DAO now features a revolutionary **phased disbursement system** for greenfield projects that automatically releases funds when milestones are validated:
+WAGA DAO features a revolutionary **phased disbursement system** for greenfield projects that automatically releases grant funds when milestones are validated:
 
 #### ✨ **Key Features:**
-- **Automatic Disbursement**: Funds released immediately upon milestone evidence validation
+- **Automatic Disbursement**: Grant funds released immediately upon milestone evidence validation
 - **Role-Based Validation**: Dedicated `MILESTONE_VALIDATOR_ROLE` for evidence approval
 - **Escrow Management**: Smart contract-managed escrow with real-time balance tracking
 - **Evidence Submission**: IPFS-based evidence storage with tamper-proof verification
@@ -94,7 +99,7 @@ WAGA DAO now features a revolutionary **phased disbursement system** for greenfi
 1. **Schedule Creation**: Grant manager defines milestones with percentage allocations
 2. **Evidence Submission**: Cooperatives submit evidence for milestone completion
 3. **Validation**: Authorized validators approve/reject evidence
-4. **Automatic Disbursement**: System immediately releases funds upon approval
+4. **Automatic Disbursement**: System immediately releases grant funds upon approval
 5. **Progress Tracking**: Real-time milestone completion and fund disbursement tracking
 
 #### 📊 **Smart Contract Architecture:**
@@ -120,6 +125,40 @@ struct MilestoneInfo {
 
 #### 🗄️ **Database Integration:**
 Complete database schema with 5 new tables:
+- `disbursement_schedules` - Overall schedule management
+- `milestones` - Individual milestone definitions
+- `milestone_evidence` - Evidence submissions and validation
+- `disbursement_history` - Complete audit trail
+- `escrow_balances` - Real-time balance tracking
+
+#### 🧪 **Comprehensive Testing:**
+- **5/5 Phased Disbursement Tests Passing**
+- End-to-end workflow validation
+- Milestone validation testing
+- Escrow management verification
+- Error condition handling
+- Backward compatibility maintained
+struct DisbursementSchedule {
+    MilestoneInfo[] milestones;
+    uint256 totalMilestones;
+    uint256 completedMilestones;
+    bool isActive;
+    uint256 escrowedAmount;
+}
+
+struct MilestoneInfo {
+    string description;
+    uint256 percentageShare;    // Basis points (10000 = 100%)
+    bool isCompleted;
+    string evidenceUri;         // IPFS evidence storage
+    uint256 completedTimestamp;
+    address validator;
+    uint256 disbursedAmount;
+}
+```
+
+#### 🗄️ **Database Integration:**
+Complete database schema with 5 tables:
 - `disbursement_schedules` - Overall schedule management
 - `milestones` - Individual milestone definitions
 - `milestone_evidence` - Evidence submissions and validation
@@ -173,7 +212,7 @@ WAGA DAO leverages [Chainlink CCIP](https://chain.link/ccip) to enable secure, p
 - **Cross-Chain PAXG Donations:**
     - Donors can send PAXG (gold-backed token) from Ethereum to the Base network using Chainlink CCIP. The `DonationHandler` contract on Base receives and processes these donations, mints VERT tokens, and tracks cross-chain provenance.
 - **Cross-Chain Governance & Yield Management:**
-    - The `ArbitrumLendingManager` on Arbitrum receives governance instructions (e.g., yield harvesting, emergency pause) from the Base network via CCIP. This enables decentralized, on-chain control of yield strategies and fund allocation across networks.
+    - The `ArbitrumLendingManager` on Arbitrum receives governance instructions (e.g., yield harvesting, emergency pause) from the Base network via CCIP. This enables decentralized, on-chain control of yield strategies and fund allocation across networks for grant funding.
 - **Source Chain Validation:**
     - All CCIP-enabled contracts validate the source chain selector to prevent spoofed or unauthorized cross-chain messages.
 - **Event Logging:**
@@ -191,7 +230,7 @@ WAGA DAO leverages [Chainlink CCIP](https://chain.link/ccip) to enable secure, p
 2. **Governance Instruction (Base → Arbitrum):**
      - DAO proposal on Base triggers a governance action (e.g., "HARVEST_YIELD").
      - Chainlink CCIP relays the instruction to `ArbitrumLendingManager` on Arbitrum.
-     - The contract executes the instruction (e.g., harvests yield, pauses lending) and logs the cross-chain event.
+     - The contract executes the instruction (e.g., harvests yield, pauses treasury operations) and logs the cross-chain event.
 
 ---
 
@@ -306,7 +345,7 @@ function emergencyWithdraw(address token, uint256 amount, address to) external
 **Location**: `src/arbitrum/ArbitrumLendingManager.sol`
 
 **Features**:
-- USDC lending and yield management on Arbitrum (Aave V3)
+- USDC yield management and treasury operations on Arbitrum (Aave V3)
 - **Receives governance instructions from Base via Chainlink CCIP**
 - Automated yield harvesting and emergency controls via cross-chain proposals
 - Multi-year greenfield project financing support
@@ -321,7 +360,7 @@ function emergencyWithdraw(address token, uint256 amount, address to) external
 - **Database integration** with automatic event emission for off-chain storage
 - Comprehensive inventory management for existing production
 - Greenfield project development with 6-stage lifecycle
-- Future production collateral for development loans
+- Future production collateral for development grants
 - Detailed project tracking (planning → full production, 3-5 years)
 - **Coffee value chain progression** with roasting and quality management
 - Integration with cooperative financing systems
@@ -385,7 +424,7 @@ function validateMilestone(
 **Features**:
 - OpenZeppelin Governor-based on-chain governance
 - VERT token-based voting with delegation support
-- Proposal creation for loan approvals and DAO management
+- Proposal creation for grant approvals and DAO management
 - Integration with timelock for security
 - Customizable voting parameters
 
@@ -419,7 +458,7 @@ Complete deployment pipeline:
 3. Deploy WAGATimelock
 4. Deploy WAGAGovernor
 5. Deploy WAGACoffeeInventoryToken
-6. Deploy CooperativeLoanManager
+6. Deploy CooperativeGrantManagerV2
 7. Deploy DonationHandler
 8. Set up roles and permissions
 
@@ -431,11 +470,11 @@ Operational scripts for:
 - **MakeDonationETH**: ETH donation workflow
 - **MakeDonationUSDC**: USDC donation workflow
 - **CreateCoffeeBatch**: Coffee batch creation for collateral
-- **CreateLoan**: Cooperative loan creation
+- **CreateGrant**: Cooperative grant creation with milestone setup
 - **CreateProposal**: Governance proposal creation
 - **DelegateVotes**: Vote delegation
 - **CheckBalances**: System state inspection
-- **RepayLoan**: Loan repayment processing
+- **SubmitMilestoneEvidence**: Phased disbursement milestone validation
 
 ### Usage Examples
 
@@ -453,9 +492,9 @@ forge script script/DeployWAGADAO.s.sol --rpc-url $BASE_SEPOLIA_RPC --broadcast 
 forge script script/WAGAInteractions.s.sol:CreateCoffeeBatch --rpc-url $RPC_URL --broadcast
 ```
 
-#### Create Cooperative Loan
+#### Create Cooperative Grant with Milestones
 ```bash
-forge script script/WAGAInteractions.s.sol:CreateLoan --rpc-url $RPC_URL --broadcast
+forge script script/WAGAInteractions.s.sol:CreateGrant --rpc-url $RPC_URL --broadcast
 ```
 
 #### Make ETH Donation
@@ -470,17 +509,17 @@ forge script script/WAGAInteractions.s.sol:MakeDonationETH --rpc-url $RPC_URL --
 ### Swiss Verein Structure
 - **Legal Framework**: Swiss Association (Verein) provides legal clarity
 - **Global Participation**: Open to international donors and coffee stakeholders
-- **Transparency**: All loan decisions and treasury management recorded on-chain
+- **Transparency**: All grant decisions and treasury management recorded on-chain
 
 ### VERT Token-Based Voting
 - **1 VERT = 1 Vote**: Democratic governance structure
-- **Proposal Threshold**: 1,000,000 VERT required to create proposals
+- **Proposal Threshold**: 1,00,000 VERT required to create proposals
 - **Voting Delay**: 1 day (7,200 blocks)
 - **Voting Period**: 7 days (50,400 blocks)
 - **Timelock Delay**: 2 days for security
 
 ### Governance Process
-1. **Proposal Creation**: VERT holders create loan approval or treasury management proposals
+1. **Proposal Creation**: VERT holders create grant approval or treasury management proposals
 2. **Voting Delay**: 1-day period before voting begins
 3. **Voting Period**: 7-day voting window
 4. **Queuing**: Successful proposals queued in timelock
@@ -492,20 +531,20 @@ forge script script/WAGAInteractions.s.sol:MakeDonationETH --rpc-url $RPC_URL --
 
 ### Treasury Structure
 - **Gold-Backed Reserves**: PAXG/XAUT holdings provide stability
-- **USDC Lending Pool**: Primary currency for cooperative loans
-- **Coffee Inventory Collateral**: ERC-1155 tokens backing each loan
+- **USDC Grant Pool**: Primary currency for cooperative grants
+- **Coffee Inventory Collateral**: ERC-1155 tokens providing value backing
 - **Risk Management**: Diversified collateral across multiple cooperatives
 
-### Loan Parameters
-- **Interest Rates**: 5-15% APR based on cooperative risk assessment
-- **Loan Duration**: 6 months to 2 years
-- **Collateral Ratio**: 1.2-1.5x coffee batch value
-- **Minimum Loan**: $1,000 USDC
-- **Maximum Loan Duration**: 730 days
+### Grant Parameters
+- **Grant Terms**: Non-repayable funding for sustainable development
+- **Grant Duration**: 6 months to 5 years for development projects
+- **Milestone-Based**: Phased disbursement tied to project progress
+- **Minimum Grant**: $1,0000 USDC
+- **Maximum Project Duration**: 1,825 days (5 years)
 
 ### Supported Currencies
 
-**Rate Structure**: 1 VERT = $1 USD equivalent
+**Rate Structure**: 1 VERT = $1 USD equivalent (rates below are indicative only - i.e. not based on real asset prices)
 
 | Currency | VERT per unit | USD Value Example | Network | Decimals |
 |----------|---------------|------------------|---------|----------|
@@ -523,7 +562,7 @@ forge script script/WAGAInteractions.s.sol:MakeDonationETH --rpc-url $RPC_URL --
 2. **Batch Documentation**: Coffee batch details recorded on-chain
 3. **Quality Assessment**: Third-party quality verification
 4. **Token Minting**: ERC-1155 tokens representing the batch
-5. **Loan Collateral**: Tokens used as collateral for USDC loans
+5. **Grant Collateral**: Tokens used as value backing for USDC grants
 
 ### Batch Information Structure
 ```solidity
@@ -536,16 +575,16 @@ struct BatchInfo {
     address cooperativeAddress; // Cooperative's payment address
     string cooperativeName;     // Name of cooperative
     string cooperativeLocation; // Geographic location
-    uint256 loanValue;         // Associated loan value in USDC
+    uint256 grantValue;         // Associated grant value in USDC
     bool isVerified;           // Third-party verification status
 }
 ```
 
 ### Cooperative Benefits
-- **Fair Financing**: Market-rate loans without predatory terms
-- **Transparent Process**: All loan terms and payments on-chain
+- **Fair Financing**: Grant funding without debt burden
+- **Transparent Process**: All grant terms and payments on-chain
 - **Direct Payments**: USDC payments directly to cooperative wallets
-- **Quality Incentives**: Better rates for higher quality coffee
+- **Quality Incentives**: Better funding for higher quality coffee
 - **Long-term Relationships**: Ongoing financing for sustainable practices
 
 ---
@@ -553,17 +592,21 @@ struct BatchInfo {
 ## 🧪 Testing Framework
 
 ### Comprehensive Test Suite ✅
-Our testing framework ensures reliability and security through multiple testing layers with **18 passing tests**:
+Our testing framework ensures reliability and security through multiple testing layers with **41 passing tests**:
 
 **Test Files**:
-- **`test/BasicTest.t.sol`** - Core functionality unit tests (5 tests)
-- **`test/WAGADAO.t.sol`** - Comprehensive contract integration tests (9 tests)
+- **`test/BasicTestV2.t.sol`** - Enhanced V2 contract testing (9 tests)
+- **`test/WAGADAOComprehensive.t.sol`** - Extended comprehensive testing (9 tests)
+- **`test/WAGADAORefactoredTest.t.sol`** - Refactored system validation (5 tests)
 - **`test/IntegrationTest.t.sol`** - Complete end-to-end workflow validation (4 tests)
+- **`test/ComprehensiveWorkflowTest.t.sol`** - Full value chain testing (3 tests)
+- **`test/GovernanceWorkflowTest.t.sol`** - Governance system validation (6 tests)
+- **`test/PhasedDisbursementTest.t.sol`** - **NEW: Phased disbursement comprehensive testing (5 tests)**
 
 **Greenfield Testing Coverage** ✅:
 - ✅ Greenfield project creation and management
 - ✅ 6-stage development lifecycle validation
-- ✅ Development loan creation and disbursement
+- ✅ Development grant creation and disbursement
 - ✅ Future production collateral validation
 - ✅ Multi-year project timeline simulation
 
@@ -607,19 +650,19 @@ Our testing framework ensures reliability and security through multiple testing 
 - ✅ Treasury funding with transparent conversion rates
 
 **Phase 3: Coffee Inventory Management**
-- ✅ Coffee batch creation with metadata and loan value
+- ✅ Coffee batch creation with metadata and grant value backing
 - ✅ ERC-1155 tokenization for collateral backing
 - ✅ Quality verification and origin tracking
 
-**Phase 4: Loan Creation and Management**
-- ✅ USDC loan creation backed by coffee inventory collateral
-- ✅ **Greenfield development loan creation** with future production backing
-- ✅ **Stage-based loan disbursement** for development projects
-- ✅ Interest calculation and repayment validation
-- ✅ Multi-year loan term support (up to 60 months)
-- ✅ Loan creation with coffee batch collateral
-- ✅ Treasury funding and automated loan disbursement
-- ✅ USDC lending with proper access controls
+**Phase 4: Grant Creation and Management**
+- ✅ USDC grant creation backed by coffee inventory collateral
+- ✅ **Greenfield development grant creation** with future production backing
+- ✅ **Milestone-based phased disbursement** for development projects
+- ✅ Automatic milestone validation and fund release
+- ✅ Multi-year grant term support (up to 60 months)
+- ✅ Grant creation with coffee batch collateral
+- ✅ Treasury funding and automated grant disbursement
+- ✅ USDC grant funding with proper access controls
 
 **Phase 5: Governance Operations**
 - ✅ Proposer token allocation and delegation
@@ -632,7 +675,7 @@ Our testing framework ensures reliability and security through multiple testing 
 
 #### ✅ Component Integration Tests
 - **`testDonationIntegration()`** - Multi-currency donation workflow
-- **`testLoanIntegration()`** - Coffee-collateralized lending
+- **`testGrantIntegration()`** - Coffee-collateralized grant funding
 - **`testGovernanceIntegration()`** - Proposal creation and voting
 
 ### Test Results Summary
@@ -641,7 +684,7 @@ Running 4 tests for test/IntegrationTest.t.sol:IntegrationTest
 [PASS] testCompleteWorkflowIntegration() (gas: 1,765,684)
 [PASS] testDonationIntegration() (gas: 321,398) 
 [PASS] testGovernanceIntegration() (gas: 310,391)
-[PASS] testLoanIntegration() (gas: 972,268)
+[PASS] testGrantIntegration() (gas: 972,268)
 
 Suite result: ✅ 4 passed; 0 failed; 0 skipped
 ```
@@ -653,8 +696,8 @@ FINAL SYSTEM METRICS:
 - Total ETH Donations: 2 ETH  
 - Total USDC Donations: 0 USDC
 - Total VERT Minted: 6,000 tokens
-- Total Loans Created: 1
-- Active Loans: 1
+- Total Grants Created: 1
+- Active Grants: 1
 - Total Disbursed: $25,000 USDC
 ```
 
@@ -701,8 +744,8 @@ forge coverage
 - **Permissioned transfers** only between verified addresses
 - **Regulatory compliance** built into smart contract logic
 
-### Loan Security
-- **Collateralized lending** with coffee inventory tokens
+### Grant Security
+- **Collateralized grant funding** with coffee inventory tokens
 - **Default protection** through liquidation mechanisms
 - **Risk diversification** across multiple cooperatives
 

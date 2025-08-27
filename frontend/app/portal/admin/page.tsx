@@ -269,7 +269,7 @@ export default function AdminPortal() {
               <Link href="/">
                 <Button variant="outline" size="sm" className="border-slate-200 text-gray-700 hover:bg-slate-50">
                   <ArrowLeft className="h-4 w-4 mr-2" />
-                  Back to Portal
+                  Back to Home
                 </Button>
               </Link>
             </div>
@@ -296,7 +296,7 @@ export default function AdminPortal() {
               <Link href="/" className="block pt-4">
                 <Button variant="outline" size="sm" className="w-full">
                   <ArrowLeft className="h-4 w-4 mr-2" />
-                  Back to Portal
+                  Back to Home
                 </Button>
               </Link>
             </div>

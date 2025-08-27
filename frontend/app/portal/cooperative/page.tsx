@@ -270,10 +270,10 @@ export default function CooperativePortal() {
       <div className="container mx-auto px-4 py-8">
         <div className="mb-8">
           <div className="flex items-center mb-6">
-            <Link href="/portal" className="mr-4">
-              <Button variant="ghost" size="sm">
+                        <Link href="/" className="mr-4">
+              <Button variant="outline" className="border-amber-200 text-gray-700 hover:bg-amber-50">
                 <ArrowLeft className="w-4 h-4 mr-2" />
-                Back to Portals
+                Back to Home
               </Button>
             </Link>
             <div>

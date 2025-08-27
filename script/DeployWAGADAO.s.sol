@@ -10,14 +10,17 @@ import {MainnetCollateralManager} from "../src/mainnet/MainnetCollateralManager.
 
 // Base contracts  
 import {DonationHandler} from "../src/base/DonationHandler.sol";
-import {CooperativeLoanManager} from "../src/base/CooperativeLoanManager.sol";
+import {CooperativeGrantManagerV2} from "../src/base/CooperativeGrantManagerV2.sol";
+
+// Manager contracts
+import {GreenfieldProjectManager} from "../src/managers/GreenfieldProjectManager.sol";
 
 // Arbitrum contracts
 import {ArbitrumLendingManager} from "../src/arbitrum/ArbitrumLendingManager.sol";
 
 // Shared contracts
 import {VERTGovernanceToken} from "../src/shared/VERTGovernanceToken.sol";
-import {WAGACoffeeInventoryToken} from "../src/shared/WAGACoffeeInventoryToken.sol";
+import {WAGACoffeeInventoryTokenV2} from "../src/shared/WAGACoffeeInventoryTokenV2.sol";
 import {IdentityRegistry} from "../src/shared/IdentityRegistry.sol";
 import {WAGAGovernor} from "../src/shared/WAGAGovernor.sol";
 import {WAGATimelock} from "../src/shared/WAGATimelock.sol";
@@ -36,7 +39,7 @@ import {WAGATimelock} from "../src/shared/WAGATimelock.sol";
  * - Complete WAGA DAO ecosystem with CCIP receiving
  * - VERTGovernanceToken, IdentityRegistry, DonationHandler
  * - WAGAGovernor, WAGATimelock, WAGACoffeeInventoryToken
- * - CooperativeLoanManager
+ * - CooperativeGrantManager
  * 
  * Arbitrum (Chain ID: 42161):
  * - ArbitrumLendingManager (USDC lending via Aave V3)
@@ -57,7 +60,7 @@ contract DeployWAGADAO is Script {
         address coffeeInventoryToken;
         address identityRegistry;
         address donationHandler;
-        address cooperativeLoanManager;
+        address cooperativeGrantManager;
         address wagaGovernor;
         address wagaTimelock;
         
@@ -162,8 +165,14 @@ contract DeployWAGADAO is Script {
         WAGAGovernor governor = new WAGAGovernor(vertToken, timelock);
         deployed.wagaGovernor = address(governor);
         
-        // 5. Deploy Coffee Inventory Token
-        WAGACoffeeInventoryToken coffeeToken = new WAGACoffeeInventoryToken(msg.sender);
+        // 5. Deploy GreenfieldProjectManager first
+        GreenfieldProjectManager greenfieldManager = new GreenfieldProjectManager(msg.sender);
+        
+        // 6. Deploy Coffee Inventory Token
+        WAGACoffeeInventoryTokenV2 coffeeToken = new WAGACoffeeInventoryTokenV2(
+            msg.sender,
+            address(greenfieldManager)
+        );
         deployed.coffeeInventoryToken = address(coffeeToken);
         
         // 6. Deploy DonationHandler with CCIP support
@@ -172,27 +181,26 @@ contract DeployWAGADAO is Script {
             address(identityRegistry),
             config.usdcToken,
             config.ethUsdPriceFeed,
-            config.xauUsdPriceFeed,
             config.ccipRouter,
             msg.sender, // treasury
             msg.sender  // initial owner
         );
         deployed.donationHandler = address(donationHandler);
         
-        // 7. Deploy Cooperative Loan Manager
-        CooperativeLoanManager loanManager = new CooperativeLoanManager(
+        // 7. Deploy Cooperative Grant Manager
+        CooperativeGrantManagerV2 grantManager = new CooperativeGrantManagerV2(
             config.usdcToken,
             address(coffeeToken),
             msg.sender, // treasury
             msg.sender  // initial admin
         );
-        deployed.cooperativeLoanManager = address(loanManager);
+        deployed.cooperativeGrantManager = address(grantManager);
         
         // 8. Configure CCIP (allow Ethereum mainnet)
         DonationHandler(donationHandler).setCCIPConfig(config.ethereumChainSelector, true);
         
         // 9. Setup roles and permissions
-        _setupBaseRoles(vertToken, identityRegistry, donationHandler, governor, timelock, coffeeToken, loanManager);
+        _setupBaseRoles(vertToken, identityRegistry, donationHandler, governor, timelock, coffeeToken, grantManager);
         
         console.log("Base ecosystem deployed successfully");
     }
@@ -243,8 +251,8 @@ contract DeployWAGADAO is Script {
         DonationHandler donationHandler,
         WAGAGovernor governor,
         WAGATimelock timelock,
-        WAGACoffeeInventoryToken coffeeToken,
-        CooperativeLoanManager loanManager
+        WAGACoffeeInventoryTokenV2 coffeeToken,
+        CooperativeGrantManagerV2 grantManager
     ) internal {
         // Grant minter role to DonationHandler
         vertToken.grantRole(vertToken.MINTER_ROLE(), address(donationHandler));
@@ -256,13 +264,13 @@ contract DeployWAGADAO is Script {
         timelock.revokeRole(timelock.EXECUTOR_ROLE(), msg.sender);
         
         // Setup coffee token roles
-        coffeeToken.grantRole(coffeeToken.DAO_ADMIN_ROLE(), address(loanManager));
-        coffeeToken.grantRole(coffeeToken.INVENTORY_MANAGER_ROLE(), address(loanManager));
-        coffeeToken.grantRole(coffeeToken.MINTER_ROLE(), address(loanManager));
+        coffeeToken.grantRole(coffeeToken.DAO_ADMIN_ROLE(), address(grantManager));
+        coffeeToken.grantRole(coffeeToken.INVENTORY_MANAGER_ROLE(), address(grantManager));
+        coffeeToken.grantRole(coffeeToken.MINTER_ROLE(), address(grantManager));
         
-        // Setup loan manager roles
-        loanManager.grantRole(loanManager.DAO_TREASURY_ROLE(), address(timelock));
-        loanManager.grantRole(loanManager.LOAN_MANAGER_ROLE(), address(timelock));
-        loanManager.grantRole(loanManager.LOAN_MANAGER_ROLE(), address(governor));
+        // Setup grant manager roles
+        grantManager.grantRole(grantManager.FINANCIAL_ROLE(), address(timelock));
+        grantManager.grantRole(grantManager.GRANT_MANAGER_ROLE(), address(timelock));
+        grantManager.grantRole(grantManager.GRANT_MANAGER_ROLE(), address(governor));
     }
 }

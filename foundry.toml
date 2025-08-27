@@ -6,12 +6,13 @@ remappings = [
     '@openzeppelin/contracts=lib/openzeppelin-contracts/contracts',
     '@chainlink/contracts=lib/chainlink-brownie-contracts/contracts',
     '@chainlink/contracts-ccip=lib/chainlink-brownie-contracts/contracts',
+    '@chainlink/contracts-ccip/test/mocks=lib/chainlink-brownie-contracts/contracts/src/v0.8/ccip/test/mocks',
     '@t-rex/contracts=lib/T-REX/contracts',
     'forge-std=lib/forge-std/src'
 ]
 auto_detect_remappings = true
 optimizer = true
-optimizer_runs = 200
+optimizer_runs = 100
 via_ir = true
 solc_version = "0.8.24"
 

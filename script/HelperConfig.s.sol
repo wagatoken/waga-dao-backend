@@ -4,6 +4,7 @@ pragma solidity ^0.8.24;
 import {Script} from "forge-std/Script.sol";
 import {ERC20Mock} from "@openzeppelin/contracts/mocks/token/ERC20Mock.sol";
 import {MockV3Aggregator} from "../test/mocks/MockV3Aggregator.sol";
+import {MockCCIPRouter} from "@chainlink/contracts/src/v0.8/ccip/test/mocks/MockRouter.sol";
 
 /**
  * @title HelperConfig (Enhanced Multi-Chain)
@@ -191,7 +192,7 @@ contract HelperConfig is Script {
             paxgToken: address(0), // PAXG not available on Base
             linkToken: 0xE4aB69C077896252FAFBD49EFD26B5D171A32410, // LINK on Base Sepolia
             ethUsdPriceFeed: 0x4aDC67696bA383F43DD60A9e78F2C97Fbbfc7cb1, // ETH/USD on Base Sepolia
-            xauUsdPriceFeed: address(0), // Will use Ethereum's XAU/USD via CCIP
+            xauUsdPriceFeed: 0x4aDC67696bA383F43DD60A9e78F2C97Fbbfc7cb1, // Using ETH/USD as XAU/USD placeholder for testing
             ccipRouter: 0xD3b06cEbF099CE7DA4AcCf578aaebFDBd6e88a93, // CCIP Router on Base Sepolia
             ethereumChainSelector: 16015286601757825753, // Sepolia chain selector
             baseChainSelector: 10344971235874465080, // Base Sepolia chain selector
@@ -246,6 +247,9 @@ contract HelperConfig is Script {
         ERC20Mock paxgMock = new ERC20Mock();
         ERC20Mock linkMock = new ERC20Mock();
         ERC20Mock aUsdcMock = new ERC20Mock();
+        
+        // Deploy mock CCIP router for local testing
+        MockCCIPRouter mockCcipRouter = new MockCCIPRouter();
 
         vm.stopBroadcast();
 
@@ -256,7 +260,7 @@ contract HelperConfig is Script {
             linkToken: address(linkMock),
             ethUsdPriceFeed: address(ethUsdPriceFeed),
             xauUsdPriceFeed: address(xauUsdPriceFeed),
-            ccipRouter: address(0x1111111111111111111111111111111111111111), // Mock CCIP router
+            ccipRouter: address(mockCcipRouter), // Mock CCIP router
             ethereumChainSelector: 1, // Mock chain selector
             baseChainSelector: 2, // Mock chain selector
             arbitrumChainSelector: 3, // Mock chain selector
@@ -275,8 +279,17 @@ contract HelperConfig is Script {
     /**
      * @dev Get the configuration for a specific chain ID
      */
-    function getConfigByChainId(uint256 chainId) public view returns (NetworkConfig memory) {
-        return s_networkConfigs[chainId];
+    function getConfigByChainId(uint256 chainId) public returns (NetworkConfig memory) {
+        NetworkConfig memory config = s_networkConfigs[chainId];
+        
+        // If no configuration exists for the current chain, create a default one
+        if (config.usdcToken == address(0)) {
+            config = getOrCreateAnvilConfig();
+            // Store it in the mapping for future use
+            s_networkConfigs[chainId] = config;
+        }
+        
+        return config;
     }
 
     /**

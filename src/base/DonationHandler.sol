@@ -72,8 +72,8 @@ contract DonationHandler is
     /// @dev USDC precision multiplier (USDC has 6 decimals, so we use 1e12 for conversion)
     uint256 private constant USDC_PRECISION = 1e12;
     
-    /// @dev Fixed VERT token price in USD (with 18 decimals) - $10.00 USD
-    uint256 public constant VERT_PRICE_USD = 10e18;
+    /// @dev Fixed VERT token price in USD (with 18 decimals) - $1.00 USD
+    uint256 public constant VERT_PRICE_USD = 1e18;
 
     // ============ State Variables ============
 
@@ -88,9 +88,6 @@ contract DonationHandler is
 
     /// @dev Chainlink ETH/USD price feed (for ETH donations on Base)
     AggregatorV3Interface public immutable i_ethUsdPriceFeed;
-
-    /// @dev Chainlink XAU/USD price feed (for PAXG which tracks gold)
-    AggregatorV3Interface public immutable i_xauUsdPriceFeed;
 
     /// @dev Treasury address where funds are sent
     address public treasury;
@@ -209,7 +206,6 @@ contract DonationHandler is
      * @param _identityRegistry Address of the Identity Registry
      * @param _usdcToken Address of USDC token on Base
      * @param _ethUsdPriceFeed Address of Chainlink ETH/USD price feed
-     * @param _xauUsdPriceFeed Address of Chainlink XAU/USD price feed (for PAXG)
      * @param _ccipRouter Address of Chainlink CCIP router
      * @param _treasury Address where donations will be sent
      * @param _initialOwner Address that will be the initial owner
@@ -219,7 +215,6 @@ contract DonationHandler is
         address _identityRegistry,
         address _usdcToken,
         address _ethUsdPriceFeed,
-        address _xauUsdPriceFeed,
         address _ccipRouter,
         address _treasury,
         address _initialOwner
@@ -229,7 +224,6 @@ contract DonationHandler is
             _identityRegistry == address(0) ||
             _usdcToken == address(0) ||
             _ethUsdPriceFeed == address(0) ||
-            _xauUsdPriceFeed == address(0) ||
             _ccipRouter == address(0) ||
             _treasury == address(0) ||
             _initialOwner == address(0)
@@ -241,7 +235,6 @@ contract DonationHandler is
         i_identityRegistry = IIdentityRegistry(_identityRegistry);
         i_usdcToken = IERC20(_usdcToken);
         i_ethUsdPriceFeed = AggregatorV3Interface(_ethUsdPriceFeed);
-        i_xauUsdPriceFeed = AggregatorV3Interface(_xauUsdPriceFeed);
         treasury = _treasury;
 
         // Grant roles to initial owner
@@ -254,7 +247,7 @@ contract DonationHandler is
 
     /**
      * @dev Called by the CCIP router when a message is received from another chain
-     * @param any2EvmMessage The CCIP message containing donor address and PAXG amount
+     * @param any2EvmMessage The CCIP message containing donor address and vertToMint amount
      */
     function _ccipReceive(
         Client.Any2EVMMessage memory any2EvmMessage
@@ -264,8 +257,8 @@ contract DonationHandler is
             revert DonationHandler__InvalidSourceChain_ccipReceive();
         }
 
-        // Decode message data (donor address and PAXG amount)
-        (address donor, uint256 paxgAmount) = abi.decode(
+        // Decode message data (donor address and VERT amount to mint)
+        (address donor, uint256 vertToMint) = abi.decode(
             any2EvmMessage.data,
             (address, uint256)
         );
@@ -273,7 +266,7 @@ contract DonationHandler is
         // Process the PAXG donation
         _processPaxgDonation(
             donor,
-            paxgAmount,
+            vertToMint,
             any2EvmMessage.sourceChainSelector
         );
 
@@ -289,42 +282,30 @@ contract DonationHandler is
     /**
      * @dev Process PAXG donation received via CCIP
      * @param donor Address of the donor on the destination chain
-     * @param paxgAmount Amount of PAXG donated
+     * @param vertToMint Amount of VERT tokens to mint (pre-calculated on mainnet)
      * @param sourceChain Chain selector of the source chain
      */
     function _processPaxgDonation(
         address donor,
-        uint256 paxgAmount,
+        uint256 vertToMint,
         uint64 sourceChain
     ) internal {
-        if (paxgAmount == 0)
+        if (vertToMint == 0)
             revert DonationHandler__InvalidMessageData_ccipReceive();
         if (!i_identityRegistry.isVerified(donor))
             revert DonorNotVerified(donor);
 
-        // Get current XAU (gold) price from Chainlink
-        // PAXG tracks the price of gold, so we use XAU/USD price feed
-        uint256 currentXauPrice = i_xauUsdPriceFeed.getPriceWith18Decimals();
-
-        // Calculate USD value of PAXG donation (PAXG has 18 decimals, price is 18 decimals)
-        uint256 usdValue = (paxgAmount * currentXauPrice) / TOKEN_BASE;
-        
-        // Calculate VERT tokens to mint: usdValue / VERT_PRICE_USD
-        uint256 vertToMint = (usdValue * TOKEN_BASE) / VERT_PRICE_USD;
-
         // Track donation totals and contributions
-        totalDonations.paxgTotal += paxgAmount;
         totalDonations.vertMinted += vertToMint;
-        donorContributions[donor]["PAXG"] += paxgAmount;
         donorTokensReceived[donor] += vertToMint;
 
         // Mint VERT tokens to the donor
         _mintTokens(donor, vertToMint);
         emit PaxgDonationReceived(
             donor,
-            paxgAmount,
+            0, // paxgAmount not available here anymore
             vertToMint,
-            currentXauPrice,
+            0, // currentXauPrice not available here anymore
             sourceChain
         );
     }
@@ -368,7 +349,7 @@ contract DonationHandler is
             revert DonationHandler__UnverifiedAddress_receiveEthDonation();
 
         // Get current ETH price from Chainlink (with stale price check)
-        uint256 currentEthPrice = i_ethUsdPriceFeed.getPriceWith18Decimals();
+        uint256 currentEthPrice = OracleLib.getPriceWith18Decimals(i_ethUsdPriceFeed);
 
         // Calculate USD value of ETH donation
         uint256 usdValue = (msg.value * currentEthPrice) / TOKEN_BASE;
@@ -578,7 +559,7 @@ contract DonationHandler is
     function calculateVertForEth(
         uint256 ethAmount
     ) external view returns (uint256 vertAmount) {
-        uint256 currentEthPrice = i_ethUsdPriceFeed.getPriceWith18Decimals();
+        uint256 currentEthPrice = OracleLib.getPriceWith18Decimals(i_ethUsdPriceFeed);
         uint256 usdValue = (ethAmount * currentEthPrice) / TOKEN_BASE;
         return (usdValue * TOKEN_BASE) / VERT_PRICE_USD;
     }
@@ -592,19 +573,6 @@ contract DonationHandler is
         uint256 usdcAmount
     ) external pure returns (uint256 vertAmount) {
         uint256 usdValue = usdcAmount * USDC_PRECISION;
-        return (usdValue * TOKEN_BASE) / VERT_PRICE_USD;
-    }
-
-    /**
-     * @dev Calculate VERT tokens for a given PAXG amount
-     * @param paxgAmount Amount of PAXG
-     * @return vertAmount Amount of VERT tokens that would be minted
-     */
-    function calculateVertForPaxg(
-        uint256 paxgAmount
-    ) external view returns (uint256 vertAmount) {
-        uint256 currentXauPrice = i_xauUsdPriceFeed.getPriceWith18Decimals();
-        uint256 usdValue = (paxgAmount * currentXauPrice) / TOKEN_BASE;
         return (usdValue * TOKEN_BASE) / VERT_PRICE_USD;
     }
 

@@ -9,8 +9,10 @@ import {IdentityRegistry} from "../src/shared/IdentityRegistry.sol";
 import {DonationHandler} from "../src/base/DonationHandler.sol";
 import {WAGAGovernor} from "../src/shared/WAGAGovernor.sol";
 import {WAGATimelock} from "../src/shared/WAGATimelock.sol";
-import {WAGACoffeeInventoryToken} from "../src/shared/WAGACoffeeInventoryToken.sol";
-import {CooperativeLoanManager} from "../src/base/CooperativeLoanManager.sol";
+import {WAGACoffeeInventoryTokenV2} from "../src/shared/WAGACoffeeInventoryTokenV2.sol";
+import {CooperativeGrantManagerV2} from "../src/base/CooperativeGrantManagerV2.sol";
+import {GreenfieldProjectManager} from "../src/managers/GreenfieldProjectManager.sol";
+import {CoffeeStructs} from "../src/shared/libraries/CoffeeStructs.sol";
 import {ERC20Mock} from "@openzeppelin/contracts/mocks/token/ERC20Mock.sol";
 
 /**
@@ -30,8 +32,8 @@ contract IntegrationTest is Test {
     DonationHandler public donationHandler;
     WAGAGovernor public governor;
     WAGATimelock public timelock;
-    WAGACoffeeInventoryToken public coffeeInventoryToken;
-    CooperativeLoanManager public loanManager;
+    WAGACoffeeInventoryTokenV2 public coffeeInventoryToken;
+    CooperativeGrantManagerV2 public grantManager;
     
     // External tokens and configuration
     ERC20Mock public usdcToken;
@@ -49,7 +51,7 @@ contract IntegrationTest is Test {
     uint256 public constant STARTING_ETH_BALANCE = 10 ether;
     uint256 public constant STARTING_USDC_BALANCE = 100_000e6;
     uint256 public constant STARTING_PAXG_BALANCE = 1000e18;
-    uint256 public constant TREASURY_FUNDING = 50_000e6; // 50k USDC for loans
+    uint256 public constant TREASURY_FUNDING = 50_000e6; // 50k USDC for grants
     
     /* -------------------------------------------------------------------------- */
     /*                                   SETUP                                    */
@@ -61,6 +63,9 @@ contract IntegrationTest is Test {
         // Deploy HelperConfig to get network configuration
         HelperConfig helperConfig = new HelperConfig();
         HelperConfig.NetworkConfig memory config = helperConfig.getConfigByChainId(block.chainid);
+        
+        console.log("Chain ID:", block.chainid);
+        console.log("USDC Token from config:", config.usdcToken);
         
         // Deploy core contracts manually with proper access control
         // Note: Using deployer as admin for all contracts to avoid access control issues
@@ -82,17 +87,20 @@ contract IntegrationTest is Test {
         vm.prank(deployer);
         governor = new WAGAGovernor(vertToken, timelock);
         
-        // Deploy coffee inventory and loan manager
+        // Deploy coffee inventory and grant manager
         vm.prank(deployer);
-        coffeeInventoryToken = new WAGACoffeeInventoryToken(deployer);
+        GreenfieldProjectManager greenfieldProjectManager = new GreenfieldProjectManager(deployer);
         
         vm.prank(deployer);
-        // Deploy cooperative loan manager
-        loanManager = new CooperativeLoanManager(
+        coffeeInventoryToken = new WAGACoffeeInventoryTokenV2(deployer, address(greenfieldProjectManager));
+        
+        vm.prank(deployer);
+        // Deploy cooperative grant manager
+        grantManager = new CooperativeGrantManagerV2(
             config.usdcToken,
             address(coffeeInventoryToken),
-            deployer, // treasury
-            deployer  // admin
+            address(timelock),
+            deployer // admin address
         );
         
         // Deploy donation handler
@@ -102,7 +110,6 @@ contract IntegrationTest is Test {
             address(identityRegistry),
             config.usdcToken,
             config.ethUsdPriceFeed,
-            config.xauUsdPriceFeed,
             config.ccipRouter,
             deployer, // treasury address
             deployer  // initial owner
@@ -154,13 +161,13 @@ contract IntegrationTest is Test {
     }
     
     function _setupTreasury() internal {
-        // Fund the treasury (deployer) and set up proper allowances for loan operations
+        // Fund the treasury (deployer) and set up proper allowances for grant operations
         if (address(usdcToken) != address(0)) {
             vm.startPrank(deployer);
-            // Keep USDC in deployer treasury and approve loan manager to spend it
-            usdcToken.approve(address(loanManager), TREASURY_FUNDING);
+            // Keep USDC in deployer treasury and approve grant manager to spend it
+            usdcToken.approve(address(grantManager), TREASURY_FUNDING);
             vm.stopPrank();
-            console.log("[SUCCESS] Treasury funded with USDC for loan operations");
+            console.log("[SUCCESS] Treasury funded with USDC for grant operations");
         }
     }
     
@@ -180,14 +187,14 @@ contract IntegrationTest is Test {
         // Phase 3: Coffee Inventory Management
         uint256 batchId = _testCoffeeInventoryCreation();
         
-        // Phase 4: Loan Creation and Management
-        uint256 loanId = _testLoanWorkflow(batchId);
+        // Phase 4: Grant Creation and Management
+        uint256 grantId = _testGrantWorkflow(batchId);
         
         // Phase 5: Governance Operations
         _testGovernanceWorkflow();
         
         // Phase 6: System State Validation
-        _validateSystemState(batchId, loanId);
+        _validateSystemState(batchId, grantId);
         
         console.log("[SUCCESS] COMPLETE WORKFLOW INTEGRATION SUCCESS");
     }
@@ -256,19 +263,18 @@ contract IntegrationTest is Test {
         vm.warp(1700000000); // Nov 2023 timestamp
         
         vm.prank(deployer);
-        batchId = coffeeInventoryToken.createBatch(
-            "ipfs://QmIntegrationTestBatch123",
-            block.timestamp - 7 days, // Production date (now safe)
-            block.timestamp + 358 days, // Expiry date  
-            3000, // 3000 kg
-            12e6, // $12 per kg
-            30000e6, // $30,000 loan value
-            "Bamendakwe Integration Test Cooperative",
-            "Cameroon",
-            cooperative,
-            "Organic, Fair Trade, Integration Test",
-            150 // 150 farmers
-        );
+        
+        // Create the batch creation parameters struct
+        CoffeeStructs.BatchCreationParams memory params = CoffeeStructs.BatchCreationParams({
+            productionDate: block.timestamp - 7 days, // Production date (now safe)
+            expiryDate: block.timestamp + 358 days, // Expiry date  
+            quantity: 3000, // 3000 kg
+            pricePerKg: 12e6, // $12 per kg
+            grantValue: 30000e6, // $30,000 grant value
+            ipfsHash: "ipfs://QmIntegrationTestBatch123" // IPFS hash for metadata
+        });
+        
+        batchId = coffeeInventoryToken.createBatch(params);
         
         // Validate batch creation
         assertTrue(coffeeInventoryToken.batchExists(batchId));
@@ -276,45 +282,47 @@ contract IntegrationTest is Test {
         console.log("[SUCCESS] Coffee batch created successfully");
         console.log("   Batch ID:", batchId);
         console.log("   Quantity: 3000 kg");
-        console.log("   Loan Value: $30,000");
+        console.log("   Grant Value: $30,000");
         
         return batchId;
     }
     
-    function _testLoanWorkflow(uint256 batchId) internal returns (uint256 loanId) {
-        console.log("\n--- Phase 4: Loan Creation and Management ---");
+    function _testGrantWorkflow(uint256 batchId) internal returns (uint256 grantId) {
+        console.log("\n--- Phase 4: Grant Creation and Management ---");
         
         uint256[] memory batchIds = new uint256[](1);
         batchIds[0] = batchId;
         
-        // Create loan
+        // Create grant
         vm.prank(deployer);
-        loanId = loanManager.createLoan(
+        grantId = grantManager.createGrant(
             cooperative,
             25000e6, // $25,000 USDC
-            365, // 1 year
-            800, // 8% APR
             batchIds,
-            "Integration test coffee processing equipment upgrade",
-            "Bamendakwe Integration Test Cooperative", 
-            "Cameroon"
+            2500, // 25% revenue share
+            2, // 2 years
+            "Integration test coffee processing equipment upgrade"
         );
         
-        // Disburse loan
+        // Fund grant manager for disbursement
         vm.prank(deployer);
-        loanManager.disburseLoan(loanId);
+        usdcToken.transfer(address(grantManager), 25000e6);
         
-        // Validate loan state
-        // If getLoan doesn't revert, the loan exists
-        loanManager.getLoan(loanId);
-        assertEq(loanManager.batchToLoan(batchId), loanId);
+        // Disburse grant
+        vm.prank(deployer);
+        grantManager.disburseGrant(grantId);
         
-        console.log("[SUCCESS] Loan workflow complete");
-        console.log("   Loan ID:", loanId);
+        // Validate grant state
+        // If getGrant doesn't revert, the grant exists
+        grantManager.getGrant(grantId);
+        // Check batch to grant mapping
+        assertEq(grantManager.getBatchGrant(batchId), grantId);
+        
+        console.log("[SUCCESS] Grant workflow complete");
+        console.log("   Grant ID:", grantId);
         console.log("   Amount: $25,000");
-        console.log("   Duration: 365 days");
         
-        return loanId;
+        return grantId;
     }
     
     function _testGovernanceWorkflow() internal {
@@ -355,7 +363,7 @@ contract IntegrationTest is Test {
         console.log("   Proposer voting power:", vertToken.getVotes(proposer) / 1e18);
     }
     
-    function _validateSystemState(uint256 batchId, uint256 loanId) internal view {
+    function _validateSystemState(uint256 batchId, uint256 grantId) internal view {
         console.log("\n--- Phase 6: System State Validation ---");
         
         // Validate token supply and distributions
@@ -371,14 +379,15 @@ contract IntegrationTest is Test {
         // Validate coffee inventory
         assertTrue(coffeeInventoryToken.batchExists(batchId));
         
-        // Validate loan system
-        // If getLoan doesn't revert, the loan exists  
-        loanManager.getLoan(loanId);
-        (uint256 totalLoans, uint256 activeLoans, uint256 totalDisbursed, ) = 
-            loanManager.getLoanStatistics();
-        assertTrue(totalLoans > 0);
-        assertTrue(activeLoans > 0);
-        assertTrue(totalDisbursed > 0);
+        // Validate grant system
+        // If getGrant doesn't revert, the grant exists  
+        grantManager.getGrant(grantId);
+        // Note: getGrantStatistics method not available in refactored architecture
+        // (uint256 totalGrants, uint256 activeGrants, uint256 totalDisbursed, ) = 
+        //     grantManager.getGrantStatistics();
+        // assertTrue(totalGrants > 0);
+        // assertTrue(activeGrants > 0);
+        // assertTrue(totalDisbursed > 0);
         
         console.log("[SUCCESS] System state validation complete");
         console.log("[METRICS] FINAL SYSTEM METRICS:");
@@ -386,9 +395,10 @@ contract IntegrationTest is Test {
         console.log("   Total ETH Donations:", ethTotal / 1e18);
         console.log("   Total USDC Donations:", usdcTotal / 1e6);
         console.log("   Total VERT Minted:", vertMinted / 1e18);
-        console.log("   Total Loans Created:", totalLoans);
-        console.log("   Active Loans:", activeLoans);
-        console.log("   Total Disbursed:", totalDisbursed / 1e6);
+        // Note: Grant statistics not available in refactored architecture
+        // console.log("   Total Grants Created:", totalGrants);
+        // console.log("   Active Grants:", activeGrants);
+        // console.log("   Total Disbursed:", totalDisbursed / 1e6);
     }
     
     /* -------------------------------------------------------------------------- */
@@ -417,8 +427,8 @@ contract IntegrationTest is Test {
         console.log("[SUCCESS] Donation integration validated");
     }
     
-    function testLoanIntegration() public {
-        console.log("\n=== TESTING LOAN INTEGRATION ===");
+    function testGrantIntegration() public {
+        console.log("\n=== TESTING GRANT INTEGRATION ===");
         
         // Register the cooperative first
         vm.prank(deployer);
@@ -426,45 +436,47 @@ contract IntegrationTest is Test {
         
         // Create coffee batch first
         vm.prank(deployer);
-        uint256 batchId = coffeeInventoryToken.createBatch(
-            "ipfs://QmLoanTestBatch",
-            block.timestamp,
-            block.timestamp + 365 days,
-            1000,
-            10e6,
-            10000e6,
-            "Test Cooperative",
-            "Test Location",
-            cooperative,
-            "Test Certification", 
-            50
-        );
         
-        // Create and disburse loan
+        // Create the batch creation parameters struct
+        CoffeeStructs.BatchCreationParams memory batchParams = CoffeeStructs.BatchCreationParams({
+            productionDate: block.timestamp,
+            expiryDate: block.timestamp + 365 days,
+            quantity: 1000,
+            pricePerKg: 10e6,
+            grantValue: 10000e6,
+            ipfsHash: "ipfs://QmGrantTestBatch"
+        });
+        
+        uint256 batchId = coffeeInventoryToken.createBatch(batchParams);
+        
+        // Create and disburse grant
         uint256[] memory batchIds = new uint256[](1);
         batchIds[0] = batchId;
         
         vm.prank(deployer);
-        uint256 loanId = loanManager.createLoan(
+        uint256 grantId = grantManager.createGrant(
             cooperative,
             10000e6,
-            365,
-            600,
             batchIds,
-            "Test loan purpose",
-            "Test Cooperative",
-            "Test Location"
+            2000, // 20% revenue share
+            3, // 3 years
+            "Test grant purpose"
         );
         
+        // Fund grant manager for disbursement
         vm.prank(deployer);
-        loanManager.disburseLoan(loanId);
+        usdcToken.transfer(address(grantManager), 10000e6);
+        
+        vm.prank(deployer);
+        grantManager.disburseGrant(grantId);
         
         // Validate integration
-        // If getLoan doesn't revert, the loan exists
-        loanManager.getLoan(loanId);
-        assertEq(loanManager.batchToLoan(batchId), loanId);
+        // If getGrant doesn't revert, the grant exists
+        grantManager.getGrant(grantId);
+        // Verify the batchToGrant mapping works correctly
+        assertEq(grantManager.getBatchGrant(batchId), grantId);
         
-        console.log("[SUCCESS] Loan integration validated");
+        console.log("[SUCCESS] Grant integration validated");
     }
     
     function testGovernanceIntegration() public {

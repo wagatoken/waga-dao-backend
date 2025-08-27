@@ -132,7 +132,8 @@ contract BaseSepoliaForkTest is Test {
         
         // Deploy Greenfield Project Manager
         greenfieldManager = new GreenfieldProjectManager(
-            address(this) // admin
+            address(0), // Will update after coffee token deployment
+            address(this)
         );
         console.log("Greenfield Manager deployed to:", address(greenfieldManager));
         
@@ -158,6 +159,7 @@ contract BaseSepoliaForkTest is Test {
             address(identityRegistry),
             config.usdcToken,
             config.ethUsdPriceFeed,
+            address(0), // XAU price feed not needed on Base
             config.ccipRouter,
             TREASURY,
             address(this)
@@ -188,29 +190,6 @@ contract BaseSepoliaForkTest is Test {
         bytes32 grantManagerRole = grantManager.GRANT_MANAGER_ROLE();
         grantManager.grantRole(grantManagerRole, address(governor));
         console.log("Granted GRANT_MANAGER_ROLE to Governor");
-        
-        // Grant MINTER_ROLE to test accounts for coffee batch creation
-        coffeeToken.grantRole(coffeeTokenMinterRole, ALICE);
-        coffeeToken.grantRole(coffeeTokenMinterRole, BOB);
-        coffeeToken.grantRole(coffeeTokenMinterRole, DAVID);
-        
-        // Grant DAO_ADMIN_ROLE to test accounts for createBatch function
-        bytes32 daoAdminRole = coffeeToken.DAO_ADMIN_ROLE();
-        coffeeToken.grantRole(daoAdminRole, ALICE);
-        coffeeToken.grantRole(daoAdminRole, BOB);
-        coffeeToken.grantRole(daoAdminRole, DAVID);
-        console.log("Granted DAO_ADMIN_ROLE to test accounts for createBatch");
-        
-        // Grant GRANT_MANAGER_ROLE to test accounts for creating grants
-        grantManager.grantRole(grantManagerRole, ALICE);
-        grantManager.grantRole(grantManagerRole, BOB);
-        grantManager.grantRole(grantManagerRole, DAVID);
-        console.log("Granted GRANT_MANAGER_ROLE to test accounts");
-        
-        // Grant PROJECT_MANAGER_ROLE to coffeeToken for greenfield projects
-        bytes32 projectManagerRole = greenfieldManager.PROJECT_MANAGER_ROLE();
-        greenfieldManager.grantRole(projectManagerRole, address(coffeeToken));
-        console.log("Granted PROJECT_MANAGER_ROLE to coffeeToken");
     }
 
     function _verifyDeployments() internal view {
@@ -273,7 +252,7 @@ contract BaseSepoliaForkTest is Test {
         // Verify governance parameters
         assertEq(governor.votingDelay(), 7200); // 1 day
         assertEq(governor.votingPeriod(), 50400); // 1 week
-        assertEq(governor.proposalThreshold(), 100_000e18); // 100K tokens
+        assertEq(governor.proposalThreshold(), 1000000e18); // 1M tokens
         
         console.log("[PASS] All deployment parameters correct");
     }
@@ -324,12 +303,17 @@ contract BaseSepoliaForkTest is Test {
         vm.prank(BOB);
         uint256 batchId = coffeeToken.createBatch(
             CoffeeStructs.BatchCreationParams({
+                ipfsUri: "ipfs://batch1",
                 productionDate: block.timestamp - 10 days,
                 expiryDate: block.timestamp + 180 days,
                 quantity: 1000,
                 pricePerKg: 5e6,
                 grantValue: 2000e6,
-                ipfsHash: "ipfs://batch1"
+                cooperativeName: "Ethiopian Highlands Premium",
+                location: "Sidama, Ethiopia",
+                paymentAddress: BOB,
+                certifications: "FairTrade",
+                farmersCount: 120
             })
         );
         
@@ -359,38 +343,45 @@ contract BaseSepoliaForkTest is Test {
         vm.prank(BOB);
         uint256 batchId = coffeeToken.createBatch(
             CoffeeStructs.BatchCreationParams({
+                ipfsUri: "ipfs://batch2",
                 productionDate: block.timestamp - 5 days,
                 expiryDate: block.timestamp + 200 days,
                 quantity: 500,
                 pricePerKg: 6e6,
                 grantValue: 1200e6,
-                ipfsHash: "ipfs://batch2"
+                cooperativeName: "Kenyan AA",
+                location: "Nyeri, Kenya",
+                paymentAddress: BOB,
+                certifications: "Organic",
+                farmersCount: 80
             })
         );
         
         // Create a grant using the coffee batch as collateral
         uint256 grantAmount = 2000e6; // $2,000 USDC
-        uint256 revenueShareBps = 2000; // 20% revenue share (in basis points)
-        uint256 durationYears = 3; // 3 years grant duration
+        uint256 interestRate = 800; // 8% APR (in basis points)
+        uint256 loanTermDays = 365; // 1 year in days
         uint256[] memory batchIds = new uint256[](1);
         batchIds[0] = batchId;
         string memory purpose = "Working capital for coffee processing";
+        string memory coopName = "Kenyan AA";
+        string memory loc = "Nyeri, Kenya";
         vm.prank(BOB);
         uint256 grantId = grantManager.createGrant(
             BOB,
             grantAmount,
             batchIds,
-            revenueShareBps, // 20% revenue share
-            durationYears, // 3 years
+            2000, // 20% revenue share
+            3, // 3 years
             purpose
         );
         // Grant verification can be done by fetching the struct and checking fields if needed
         ICooperativeGrantManager.GrantInfo memory grantInfo = grantManager.getGrant(grantId);
-        address cooperative = grantInfo.cooperative;
+        address borrower = grantInfo.cooperative;
         uint256 amount = grantInfo.amount;
 
         console.log("Grant created - ID:", grantId);
-        console.log("Cooperative:", cooperative);
+        console.log("Borrower:", borrower);
         console.log("Amount:", amount);
         console.log("[PASS] Cooperative grant creation successful");
     }
@@ -437,16 +428,21 @@ contract BaseSepoliaForkTest is Test {
     function testCoffeePurchaseAndGrantRepayment() public {
         console.log("=== TEST 6: COFFEE PURCHASE AND GRANT REPAYMENT ===");
         
-        // Setup: Create batch and grant
+        // Setup: Create batch and loan
         vm.prank(BOB);
         uint256 batchId = coffeeToken.createBatch(
             CoffeeStructs.BatchCreationParams({
+                ipfsUri: "ipfs://batch3",
                 productionDate: block.timestamp - 2 days,
                 expiryDate: block.timestamp + 150 days,
                 quantity: 300,
                 pricePerKg: 8e6,
                 grantValue: 900e6,
-                ipfsHash: "ipfs://batch3"
+                cooperativeName: "Colombian Supreme",
+                location: "Huila, Colombia",
+                paymentAddress: BOB,
+                certifications: "Rainforest",
+                farmersCount: 60
             })
         );
         
@@ -454,8 +450,10 @@ contract BaseSepoliaForkTest is Test {
         uint256[] memory batchIds = new uint256[](1);
         batchIds[0] = batchId;
         string memory purpose = "Pre-harvest financing";
+        string memory coopName = "Colombian Supreme";
+        string memory loc = "Huila, Colombia";
         vm.prank(BOB);
-        grantManager.createGrant(
+        uint256 loanId = grantManager.createGrant(
             BOB,
             grantAmount2,
             batchIds,
@@ -496,26 +494,33 @@ contract BaseSepoliaForkTest is Test {
         console.log("=== TEST 7: GREENFIELD COFFEE PROJECT ===");
         
     // David creates a greenfield development project
+    IWAGACoffeeInventoryToken.GreenfieldProjectParams memory params;
+    params.ipfsUri = "ipfs://greenfield1";
+    params.plantingDate = block.timestamp + 30 days;
+    params.maturityDate = block.timestamp + 3 * 365 days;
+    params.projectedYield = 2000;
+    params.investmentStage = 0;
+    params.pricePerKg = 10e6;
+    params.grantValue = 10000e6;
+    params.cooperativeName = "Rwanda New Coffee Farm";
+    params.location = "Rwanda";
+    params.paymentAddress = DAVID;
+    params.certifications = "Organic";
+    params.farmersCount = 40;
     vm.prank(DAVID);
-    uint256 projectId = coffeeToken.createGreenfieldProject(
-        "ipfs://greenfield1",
-        block.timestamp + 30 days,  // plantingDate
-        block.timestamp + 3 * 365 days,  // maturityDate
-        2000,  // projectedYield
-        10000e6  // grantValue
-    );
+    uint256 projectId = coffeeToken.createGreenfieldProject(params);
     // Verify greenfield project creation
     // Check via individual calls to avoid struct name conflicts
     (bool isGreenfield,, , uint256 projectedYield,) = coffeeToken.getGreenfieldProjectDetails(projectId);
     assertTrue(isGreenfield, "Greenfield project should exist");
-    assertEq(projectedYield, 2000, "Projected yield should match");
+    assertEq(projectedYield, params.projectedYield, "Projected yield should match");
         
         // Create development grant for greenfield project
         uint256 grantAmount3 = 8000e6; // $8,000 for development
         uint256[] memory collateralTokenIds = new uint256[](1);
         uint256[] memory collateralAmounts = new uint256[](1);
         collateralTokenIds[0] = projectId;
-        collateralAmounts[0] = 2000; // Future production as collateral
+        collateralAmounts[0] = params.projectedYield; // Future production as collateral
         
         vm.prank(DAVID);
         grantManager.createGrant(
@@ -626,17 +631,26 @@ contract BaseSepoliaForkTest is Test {
             uint256 expiryDate = block.timestamp + (i+1) * 100 days;
             uint256 quantity = 100 + (i * 50);
             uint256 pricePerKg = basePrice + (i * 1e6);
-            uint256 grantValue = 1000e6 + (i * 100e6);
+            uint256 loanValue = 1000e6 + (i * 100e6);
+            string memory cooperativeName = string(abi.encodePacked("Batch #", vm.toString(i+10)));
+            string memory location = i % 2 == 0 ? "Sidama" : "Nyeri";
             address paymentAddress = i % 2 == 0 ? BOB : DAVID;
+            string memory certifications = "FairTrade";
+            uint256 farmersCount = 50 + i * 10;
             vm.prank(paymentAddress);
             coffeeToken.createBatch(
                 CoffeeStructs.BatchCreationParams({
+                    ipfsUri: ipfsUri,
                     productionDate: productionDate,
                     expiryDate: expiryDate,
                     quantity: quantity,
                     pricePerKg: pricePerKg,
-                    grantValue: grantValue,
-                    ipfsHash: ipfsUri
+                    grantValue: loanValue,
+                    cooperativeName: cooperativeName,
+                    location: location,
+                    paymentAddress: paymentAddress,
+                    certifications: certifications,
+                    farmersCount: farmersCount
                 })
             );
         }
@@ -646,11 +660,10 @@ contract BaseSepoliaForkTest is Test {
         // Create grants against multiple batches
         uint256 totalCollateralValue = 0;
         for (uint i = 0; i < numberOfBatches; i++) {
-            uint256 batchId = 1 + i; // Batches start from ID 1
+            uint256 batchId = 10 + i;
             // Check via individual calls to avoid struct name conflicts
-            CoffeeStructs.BatchInfo memory batchInfo = coffeeToken.getBatchInfo(batchId);
-            uint256 currentQuantity = batchInfo.currentQuantity;
-            uint256 pricePerKg = batchInfo.pricePerKg;
+            uint256 currentQuantity = coffeeToken.getBatchInfo(batchId).currentQuantity;
+            uint256 pricePerKg = coffeeToken.getBatchInfo(batchId).pricePerKg;
             // No direct 'exists' field, so just sum if price > 0
             if (pricePerKg > 0) {
                 totalCollateralValue += (currentQuantity * pricePerKg);
@@ -675,11 +688,8 @@ contract BaseSepoliaForkTest is Test {
         // Count created coffee batches (estimate)
         for (uint i = 1; i <= 15; i++) {
             // Check via individual call to avoid struct name conflicts
-            try coffeeToken.getBatchInfo(i) returns (CoffeeStructs.BatchInfo memory batchInfo) {
-                if (batchInfo.pricePerKg > 0) totalCoffeeBatches++;
-            } catch {
-                // Batch doesn't exist, skip
-            }
+            uint256 pricePerKg = coffeeToken.getBatchInfo(i).pricePerKg;
+            if (pricePerKg > 0) totalCoffeeBatches++;
         }
         
         console.log("=== FINAL SYSTEM STATE ===");

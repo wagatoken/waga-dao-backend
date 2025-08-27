@@ -28,7 +28,7 @@ contract WAGAGovernor is
     /// Constants ///
     uint48 private constant VOTING_DELAY = 7_200; // 1 day in blocks (12 second blocks)
     uint32 private constant VOTING_PERIOD = 50_400; // 7 days in blocks
-    uint256 private constant PROPOSAL_THRESHOLD = 1_000_000e18; // 1M tokens to propose
+    uint256 private constant PROPOSAL_THRESHOLD = 100_000e18; // 100K tokens to propose
     
     /* -------------------------------------------------------------------------- */
     /*                                  CONSTANTS                                 */

@@ -206,7 +206,7 @@ contract MainnetCollateralManager is AccessControl, Pausable, ReentrancyGuard, C
         bytes32 messageId = _sendCCIPMessage(
             s_destinationChainSelector,
             s_destinationContract,
-            abi.encode(msg.sender, amount)
+            abi.encode(msg.sender, vertToMint)
         );
 
         emit PaxgDonationProcessed(

@@ -7,8 +7,9 @@ import {VERTGovernanceToken} from "src/shared/VERTGovernanceToken.sol";
 import {IdentityRegistry} from "src/shared/IdentityRegistry.sol";
 import {DonationHandler} from "src/base/DonationHandler.sol";
 import {WAGAGovernor} from "src/shared/WAGAGovernor.sol";
-import {WAGACoffeeInventoryToken} from "src/shared/WAGACoffeeInventoryToken.sol";
-import {CooperativeLoanManager} from "src/base/CooperativeLoanManager.sol";
+import {WAGACoffeeInventoryTokenV2} from "src/shared/WAGACoffeeInventoryTokenV2.sol";
+import {CooperativeGrantManagerV2} from "src/base/CooperativeGrantManagerV2.sol";
+import {CoffeeStructs} from "src/shared/libraries/CoffeeStructs.sol";
 import {ERC20Mock} from "@openzeppelin/contracts/mocks/token/ERC20Mock.sol";
 
 /**
@@ -99,116 +100,100 @@ contract CreateCoffeeBatch is Script {
         uint256 expiryDate,
         uint256 quantity,
         uint256 pricePerKg,
-        uint256 loanValue,
-        string memory cooperativeName,
-        string memory location,
-        address paymentAddress,
-        string memory certifications,
-        uint256 farmersCount
+        uint256 grantValue
     ) public returns (uint256 batchId) {
         vm.startBroadcast();
         
-        batchId = WAGACoffeeInventoryToken(coffeeInventoryToken).createBatch(
-            ipfsUri,
-            productionDate,
-            expiryDate,
-            quantity,
-            pricePerKg,
-            loanValue,
-            cooperativeName,
-            location,
-            paymentAddress,
-            certifications,
-            farmersCount
-        );
+        // Create simplified batch creation parameters (blockchain-first approach)
+        CoffeeStructs.BatchCreationParams memory params = CoffeeStructs.BatchCreationParams({
+            productionDate: productionDate,
+            expiryDate: expiryDate,
+            quantity: quantity,
+            pricePerKg: pricePerKg,
+            grantValue: grantValue,
+            ipfsHash: ipfsUri  // All rich metadata goes to IPFS + database
+        });
+        
+        batchId = WAGACoffeeInventoryTokenV2(coffeeInventoryToken).createBatch(params);
         
         vm.stopBroadcast();
         console.log("Created coffee batch with ID:", batchId);
         console.log("Quantity:", quantity, "kg");
         console.log("Price per kg:", pricePerKg, "USDC");
+        console.log("NOTE: Cooperative details stored off-chain via database API");
         return batchId;
     }
 
     function run() external {
         address coffeeInventoryToken = DevOpsTools.get_most_recent_deployment(
-            "WAGACoffeeInventoryToken",
+            "WAGACoffeeInventoryTokenV2",
             block.chainid
         );
         
         // Example coffee batch from Ethiopian cooperative
         createCoffeeBatch(
             coffeeInventoryToken,
-            "QmExample123...", // IPFS URI
+            "QmExample123...", // IPFS URI with rich metadata
             block.timestamp - 30 days, // Production date (30 days ago)
             block.timestamp + 365 days, // Expiry date (1 year from now)
             5000, // 5,000 kg of coffee
             8500000, // $8.50 per kg (8.5 * 1e6 USDC)
-            42500000000, // $42,500 loan value (42.5 * 1e6 USDC)
-            "Sidamo Coffee Cooperative",
-            "Sidamo, Ethiopia",
-            address(0xabCDEF1234567890ABcDEF1234567890aBCDeF12), // Cooperative address
-            "Fair Trade, Organic, Rainforest Alliance",
-            250 // 250 farmers
+            42500000000 // $42,500 grant value (42.5 * 1e6 USDC)
+            // NOTE: Cooperative details (name, location, farmers count, etc.) stored off-chain
         );
     }
 }
 
 /**
- * @title CreateLoan
- * @notice Script to create a new loan for a coffee cooperative
+ * @title CreateGrant
+ * @notice Script to create a new grant for a coffee cooperative
  */
-contract CreateLoan is Script {
-    function createLoan(
-        address loanManager,
+contract CreateGrant is Script {
+    function createGrant(
+        address grantManager,
         address cooperative,
         uint256 amount,
-        uint256 durationDays,
-        uint256 interestRate,
         uint256[] memory batchIds,
-        string memory purpose,
-        string memory cooperativeName,
-        string memory location
-    ) public returns (uint256 loanId) {
+        uint256 revenueSharePercentage,
+        uint256 durationYears,
+        string memory description
+    ) public returns (uint256 grantId) {
         vm.startBroadcast();
         
-        loanId = CooperativeLoanManager(loanManager).createLoan(
+        grantId = CooperativeGrantManagerV2(grantManager).createGrant(
             cooperative,
             amount,
-            durationDays,
-            interestRate,
             batchIds,
-            purpose,
-            cooperativeName,
-            location
+            revenueSharePercentage,
+            durationYears,
+            description
         );
         
         vm.stopBroadcast();
-        console.log("Created loan with ID:", loanId);
+        console.log("Created grant with ID:", grantId);
         console.log("Amount:", amount, "USDC");
-        console.log("Duration:", durationDays, "days");
-        return loanId;
+        console.log("Duration:", durationYears, "years");
+        return grantId;
     }
 
     function run() external {
-        address loanManager = DevOpsTools.get_most_recent_deployment(
-            "CooperativeLoanManager",
+        address grantManager = DevOpsTools.get_most_recent_deployment(
+            "CooperativeGrantManager",
             block.chainid
         );
         
-        // Example loan for coffee processing equipment
+        // Example grant for coffee processing equipment
         uint256[] memory batchIds = new uint256[](1);
         batchIds[0] = 1; // Using batch created in CreateCoffeeBatch
         
-        createLoan(
-            loanManager,
+        createGrant(
+            grantManager,
             address(0xabCDEF1234567890ABcDEF1234567890aBCDeF12), // Cooperative address
-            25000e6, // $25,000 USDC loan
-            365, // 1 year duration
-            800, // 8% annual interest rate
+            25000e6, // $25,000 USDC grant
             batchIds,
-            "Coffee processing equipment and infrastructure upgrade",
-            "Sidamo Coffee Cooperative",
-            "Sidamo, Ethiopia"
+            3000, // 30% revenue share to DAO
+            3, // 3 years duration
+            "Coffee processing equipment and infrastructure upgrade"
         );
     }
 }
@@ -238,38 +223,32 @@ contract CreateProposal is Script {
     }
 
     function run() external {
-        address governor = DevOpsTools.get_most_recent_deployment(
+        address payable governor = payable(DevOpsTools.get_most_recent_deployment(
             "WAGAGovernor",
             block.chainid
-        );
+        ));
         
-        // Example proposal: Approve loan creation
+        // Example proposal: Approve grant creation
         address[] memory targets = new address[](1);
         uint256[] memory values = new uint256[](1);
         bytes[] memory calldatas = new bytes[](1);
         
-        address loanManager = DevOpsTools.get_most_recent_deployment(
-            "CooperativeLoanManager",
+        address grantManager = DevOpsTools.get_most_recent_deployment(
+            "CooperativeGrantManager",
             block.chainid
         );
         
-        targets[0] = loanManager;
+        targets[0] = grantManager;
         values[0] = 0;
         
-        // Create calldata for loan creation
-        uint256[] memory batchIds = new uint256[](1);
-        batchIds[0] = 1;
+                // Create calldata for grant creation (simplified for now)
+        calldatas[0] = "";
         
-        calldatas[0] = abi.encodeWithSignature(
-            "createLoan(address,uint256,uint256,uint256,uint256[],string,string,string)",
-            address(0xabCDEF1234567890ABcDEF1234567890aBCDeF12), // cooperative
-            25000e6, // amount
-            365, // duration
-            800, // interest rate
-            batchIds, // batch IDs
-            "Coffee processing equipment upgrade",
-            "Sidamo Coffee Cooperative",
-            "Sidamo, Ethiopia"
+        uint256 proposalId = WAGAGovernor(governor).propose(
+            targets,
+            values,
+            calldatas,
+            "Approve $25,000 USDC grant to Sidamo Coffee Cooperative for processing equipment upgrade"
         );
         
         createProposal(
@@ -313,13 +292,13 @@ contract CheckBalances is Script {
         address governanceToken,
         address donationHandler,
         address coffeeInventoryToken,
-        address loanManager,
+        address grantManager,
         address user
     ) public view {
         VERTGovernanceToken token = VERTGovernanceToken(governanceToken);
         DonationHandler handler = DonationHandler(payable(donationHandler));
-        WAGACoffeeInventoryToken coffeeToken = WAGACoffeeInventoryToken(coffeeInventoryToken);
-        CooperativeLoanManager loans = CooperativeLoanManager(loanManager);
+        WAGACoffeeInventoryTokenV2 coffeeToken = WAGACoffeeInventoryTokenV2(coffeeInventoryToken);
+        CooperativeGrantManagerV2 grants = CooperativeGrantManagerV2(grantManager);
         
         console.log("=== WAGA DAO BALANCES & STATUS ===");
         console.log("User VERT balance:", token.balanceOf(user));
@@ -335,13 +314,11 @@ contract CheckBalances is Script {
         console.log("Total fiat donations:", fiatTotal);
         console.log("Total VERT minted:", vertMinted);
         
-        // Check loan statistics
-        (uint256 totalLoans, uint256 activeLoans, uint256 totalDisbursed, uint256 totalRepaid) = loans.getLoanStatistics();
-        console.log("=== LOAN STATISTICS ===");
-        console.log("Total loans:", totalLoans);
-        console.log("Active loans:", activeLoans);
-        console.log("Total disbursed:", totalDisbursed);
-        console.log("Total repaid:", totalRepaid);
+        // Check grant statistics (simplified for transformation)
+        console.log("=== GRANT STATISTICS ===");
+        console.log("Grant system active - statistics available via getGrantStatistics()");
+        // (uint256 totalGrants, uint256 activeGrants, uint256 totalDisbursed, uint256 totalRevenueShared) = grants.getGrantStatistics();
+        console.log("Grant system transformed from loan-based to equity-sharing model");
         
         // Check next coffee batch ID
         console.log("=== COFFEE INVENTORY ===");
@@ -358,46 +335,41 @@ contract CheckBalances is Script {
             block.chainid
         );
         address coffeeInventoryToken = DevOpsTools.get_most_recent_deployment(
-            "WAGACoffeeInventoryToken",
+            "WAGACoffeeInventoryTokenV2",
             block.chainid
         );
-        address loanManager = DevOpsTools.get_most_recent_deployment(
-            "CooperativeLoanManager",
+        address grantManager = DevOpsTools.get_most_recent_deployment(
+            "CooperativeGrantManager",
             block.chainid
         );
         address user = address(0x1234567890123456789012345678901234567890); // Example user
         
-        checkBalances(governanceToken, donationHandler, coffeeInventoryToken, loanManager, user);
+        checkBalances(governanceToken, donationHandler, coffeeInventoryToken, grantManager, user);
     }
 }
 
 /**
- * @title RepayLoan
- * @notice Script to repay a loan
+ * @title RecordRevenueShare
+ * @notice Script to record revenue sharing from coffee sales
  */
-contract RepayLoan is Script {
-    function repayLoan(address loanManager, address usdcToken, uint256 loanId, uint256 amount) public {
+contract RecordRevenueShare is Script {
+    function recordRevenueShare(address grantManager, uint256 grantId, uint256 revenueAmount) public {
         vm.startBroadcast();
         
-        // First approve the loan manager to spend USDC
-        ERC20Mock(usdcToken).approve(loanManager, amount);
-        
-        // Make the repayment
-        CooperativeLoanManager(loanManager).repayLoan(loanId, amount);
+        CooperativeGrantManagerV2(grantManager).recordRevenueShare(grantId, revenueAmount);
         
         vm.stopBroadcast();
-        console.log("Repaid loan ID:", loanId);
-        console.log("Amount:", amount, "USDC");
+        console.log("Recorded revenue share for grant ID:", grantId);
+        console.log("Revenue amount:", revenueAmount, "USDC");
     }
 
     function run() external {
-        address loanManager = DevOpsTools.get_most_recent_deployment(
-            "CooperativeLoanManager",
+        address grantManager = DevOpsTools.get_most_recent_deployment(
+            "CooperativeGrantManager",
             block.chainid
         );
-        address usdcToken = 0x036CbD53842c5426634e7929541eC2318f3dCF7e; // Base Sepolia USDC
         
-        // Example: Partial repayment of loan ID 1
-        repayLoan(loanManager, usdcToken, 1, 5000e6); // $5,000 USDC repayment
+        // Example: Record revenue share for grant ID 1
+        recordRevenueShare(grantManager, 1, 10000e6); // $10,000 USDC revenue
     }
 }

@@ -1,14 +1,96 @@
-# Compiler files
+# =============================================================================
+# BACKEND FILES - Keep locally but don't push to GitHub
+# =============================================================================
+
+# Foundry/Solidity Backend
+src/
+script/
+test/
+lib/
 cache/
 out/
+foundry.toml
+foundry.lock
+remappings.txt
 
-# Ignores development broadcast logs
+# Solidity contracts and related files
+*.sol
+*.s.sol
+*.t.sol
+
+# Project documentation and status (backend-specific)
+PROJECT_STATUS.md
+README.md
+
+# Environment files
+.env
+.env.local
+.env.production
+
+# Broadcast logs
+broadcast/
 !/broadcast
 /broadcast/*/31337/
 /broadcast/**/dry-run/
 
-# Docs
+# Documentation
 docs/
 
-# Dotenv file
-.env
+# Forge/Anvil temporary files
+.forge-cache/
+.anvil/
+
+# Node.js backend (if any)
+node_modules/
+package-lock.json
+yarn.lock
+
+# Database files (if any)
+*.db
+*.sqlite
+*.sqlite3
+database/
+migrations/
+
+# =============================================================================
+# FRONTEND FILES - Keep and push to GitHub
+# =============================================================================
+
+# Frontend dependencies and build files
+frontend/node_modules/
+frontend/.next/
+frontend/out/
+frontend/build/
+frontend/dist/
+
+# Frontend environment files
+frontend/.env
+frontend/.env.local
+frontend/.env.production
+frontend/.env.test
+
+# Frontend logs
+frontend/npm-debug.log*
+frontend/yarn-debug.log*
+frontend/yarn-error.log*
+
+# Frontend IDE and editor files
+frontend/.vscode/
+frontend/.idea/
+frontend/*.swp
+frontend/*.swo
+frontend/*~
+
+# OS generated files
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+
+# Temporary files
+*.tmp
+*.temp
+*.log

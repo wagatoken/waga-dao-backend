@@ -148,7 +148,8 @@ contract BaseSepoliaForkTest is Test {
             config.usdcToken,
             address(greenfieldManager),
             TREASURY,
-            address(this)
+            address(this),
+            address(0) // ZK Proof Manager - placeholder for now
         );
         console.log("Grant Manager deployed to:", address(grantManager));
         

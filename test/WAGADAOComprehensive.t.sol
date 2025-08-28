@@ -109,9 +109,10 @@ contract WAGADAOComprehensiveTest is Test {
         // 7. Deploy Cooperative Grant Manager
         grantManager = new CooperativeGrantManagerV2(
             address(usdcToken),
-            address(coffeeInventoryToken),
+            address(greenfieldProjectManager),
             address(timelock),
-            admin // admin address
+            admin, // admin address
+            address(0) // ZK Proof Manager - placeholder for now
         );
 
         // 8. Deploy DonationHandler with all required contracts

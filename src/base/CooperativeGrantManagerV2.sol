@@ -127,10 +127,10 @@ contract CooperativeGrantManagerV2 is
         address _admin,
         address _zkProofManager
     ) {
-        if (_usdcToken == address(0)) revert CooperativeGrantManagerV2__InvalidTokenAddress();
-        if (_greenfieldManager == address(0)) revert CooperativeGrantManagerV2__InvalidGreenfieldManager();
-        if (_treasury == address(0)) revert CooperativeGrantManagerV2__InvalidTreasury();
-        if (_admin == address(0)) revert CooperativeGrantManagerV2__InvalidAdmin();
+        if (_usdcToken == address(0)) revert CooperativeGrantManager__InvalidTokenAddress();
+        if (_greenfieldManager == address(0)) revert CooperativeGrantManager__InvalidGreenfieldManager();
+        if (_treasury == address(0)) revert CooperativeGrantManager__InvalidTreasury();
+        if (_admin == address(0)) revert CooperativeGrantManager__InvalidAdmin();
         
         usdcToken = IERC20(_usdcToken);
         greenfieldManager = GreenfieldProjectManager(_greenfieldManager);
@@ -519,20 +519,22 @@ contract CooperativeGrantManagerV2 is
         uint256 milestoneIndex,
         IZKProofVerifier.ProofType proofType,
         bytes calldata proofData,
+        bytes calldata publicInputs,
         bytes32 publicInputsHash,
         IZKProofVerifier.ProofMetadata calldata metadata
     ) external onlyRole(ZK_PROOF_MANAGER_ROLE) returns (bytes32 proofHash) {
         
         // Validate grant and milestone
-        if (!_grantExists(grantId)) revert CooperativeGrantManagerV2__GrantNotFound();
+        if (!_grantExists(grantId)) revert CooperativeGrantManager__GrantNotFound();
         if (milestoneIndex >= disbursementSchedules[grantId].totalMilestones) {
-            revert CooperativeGrantManagerV2__InvalidMilestoneIndex();
+            revert CooperativeGrantManager__InvalidMilestoneIndex();
         }
         
         // Submit proof to ZK Proof Manager
         proofHash = zkProofManager.submitProof(
             proofType,
             proofData,
+            publicInputs,
             publicInputsHash,
             metadata
         );
@@ -559,21 +561,21 @@ contract CooperativeGrantManagerV2 is
     ) external onlyRole(MILESTONE_VALIDATOR_ROLE) returns (bool success) {
         
         // Validate grant and milestone
-        if (!_grantExists(grantId)) revert CooperativeGrantManagerV2__GrantNotFound();
+        if (!_grantExists(grantId)) revert CooperativeGrantManager__GrantNotFound();
         if (milestoneIndex >= disbursementSchedules[grantId].totalMilestones) {
-            revert CooperativeGrantManagerV2__InvalidMilestoneIndex();
+            revert CooperativeGrantManager__InvalidMilestoneIndex();
         }
         
         // Check if proof hash matches stored proof
         if (milestoneProofs[grantId][milestoneIndex] != proofHash) {
-            revert CooperativeGrantManagerV2__InvalidProofHash();
+            revert CooperativeGrantManager__InvalidProofHash();
         }
         
         // Verify the zk-proof
         IZKProofVerifier.VerificationResult memory result = zkProofManager.verifyProof(proofHash);
         
         if (!result.success) {
-            revert CooperativeGrantManagerV2__ProofVerificationFailed();
+            revert CooperativeGrantManager__ProofVerificationFailed();
         }
         
         // Mark milestone as completed
@@ -581,7 +583,7 @@ contract CooperativeGrantManagerV2 is
         MilestoneInfo storage milestone = schedule.milestones[milestoneIndex];
         
         if (milestone.isCompleted) {
-            revert CooperativeGrantManagerV2__MilestoneAlreadyCompleted();
+            revert CooperativeGrantManager__MilestoneAlreadyCompleted();
         }
         
         milestone.isCompleted = true;
@@ -796,7 +798,7 @@ contract CooperativeGrantManagerV2 is
      * @param newZKProofManager Address of the new ZK Proof Manager
      */
     function updateZKProofManager(address newZKProofManager) external onlyRole(DEFAULT_ADMIN_ROLE) {
-        if (newZKProofManager == address(0)) revert CooperativeGrantManagerV2__InvalidZKProofManager();
+        if (newZKProofManager == address(0)) revert CooperativeGrantManager__InvalidZKProofManager();
         
         address oldManager = address(zkProofManager);
         zkProofManager = IZKProofVerifier(newZKProofManager);

@@ -140,12 +140,10 @@ interface ICooperativeGrantManager {
     
     error CooperativeGrantManager__InvalidGrantAmount();
     error CooperativeGrantManager__InvalidRevenueShare();
-    error CooperativeGrantManager__GrantNotActive();
     error CooperativeGrantManager__UnauthorizedCoop();
     error CooperativeGrantManager__InvalidBatchIds();
     error CooperativeGrantManager__InsufficientFunds();
     error CooperativeGrantManager__InvalidDuration();
-    error CooperativeGrantManager__GrantAlreadyCompleted();
 
     // ============ VIEW FUNCTIONS ============
     

@@ -109,13 +109,15 @@ contract ZKProofManager is IZKProofVerifier, AccessControl, Pausable, Reentrancy
      * @notice Submit a zk-proof for verification
      * @param proofType Type of proof (RISC_ZERO or CIRCOM)
      * @param proofData Raw proof data
-     * @param publicInputsHash Hash of public inputs
+     * @param publicInputs Actual public inputs
+     * @param publicInputsHash Hash of public inputs for integrity
      * @param metadata Proof metadata
      * @return proofHash Unique identifier for the submitted proof
      */
     function submitProof(
         ProofType proofType,
         bytes calldata proofData,
+        bytes calldata publicInputs,
         bytes32 publicInputsHash,
         ProofMetadata calldata metadata
     ) external override whenNotPaused returns (bytes32 proofHash) {
@@ -135,10 +137,30 @@ contract ZKProofManager is IZKProofVerifier, AccessControl, Pausable, Reentrancy
             revert ZKProofManager__ProofAlreadySubmitted();
         }
         
+        // Verify that public inputs hash matches the actual inputs
+        require(
+            keccak256(publicInputs) == publicInputsHash,
+            "Public inputs hash mismatch"
+        );
+        
+        // Validate that the circuit is supported
+        if (proofType == ProofType.RISC_ZERO) {
+            require(
+                riscZeroVerifier.isCircuitSupported(metadata.circuitHash),
+                "RISC Zero circuit not supported"
+            );
+        } else if (proofType == ProofType.CIRCOM) {
+            require(
+                circomVerifier.isCircuitSupported(metadata.circuitHash),
+                "Circom circuit not supported"
+            );
+        }
+        
         // Create proof record
         proofs[proofHash] = ZKProof({
             proofType: proofType,
             proofData: proofData,
+            publicInputs: publicInputs,
             publicInputsHash: publicInputsHash,
             proofHash: proofHash,
             timestamp: block.timestamp,
@@ -283,7 +305,7 @@ contract ZKProofManager is IZKProofVerifier, AccessControl, Pausable, Reentrancy
         try riscZeroVerifier.verifyRISCZeroProof(
             proofHash,
             proof.proofData,
-            "", // publicInputs - would be decoded from publicInputsHash
+            proof.publicInputs, // Use stored public inputs
             proofMetadata[proofHash].circuitHash
         ) returns (bool result) {
             success = result;
@@ -319,7 +341,7 @@ contract ZKProofManager is IZKProofVerifier, AccessControl, Pausable, Reentrancy
         try circomVerifier.verifyCircomProof(
             proofHash,
             proof.proofData,
-            "", // publicInputs - would be decoded from publicInputsHash
+            proof.publicInputs, // Use stored public inputs
             proofMetadata[proofHash].circuitHash
         ) returns (bool result) {
             success = result;
@@ -348,7 +370,7 @@ contract ZKProofManager is IZKProofVerifier, AccessControl, Pausable, Reentrancy
         proofTypeStatusCounts[proofType][VerificationStatus.EXPIRED]++;
         totalProofsExpired++;
         
-        emit ProofExpired(proofHash, block.timestamp);
+        emit ProofExpired(proofHash, proofType, block.timestamp);
     }
     
     /**

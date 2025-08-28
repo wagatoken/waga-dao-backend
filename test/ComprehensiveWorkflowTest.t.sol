@@ -113,9 +113,10 @@ contract ComprehensiveWorkflowTest is Test {
         // 7. Grant Manager
         grantManager = new CooperativeGrantManagerV2(
             address(usdcToken),
-            address(coffeeInventoryToken),
+            address(greenfieldProjectManager),
             address(timelock),
-            admin
+            admin,
+            address(0) // ZK Proof Manager - placeholder for now
         );
         
         // 8. Donation Handler
@@ -509,7 +510,7 @@ contract ComprehensiveWorkflowTest is Test {
         
         // Verify all projects were created
         for (uint256 i = 0; i < 3; i++) {
-            assertTrue(coffeeInventoryToken.batchExists(projectIds[i]), "Project should exist");
+            assertTrue(greenfieldProjectManager.projectExists(projectIds[i]), "Project should exist");
             assertTrue(grantManager.isGrantActive(grantIds[i]), "Grant should be active");
         }
         

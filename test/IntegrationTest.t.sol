@@ -98,9 +98,10 @@ contract IntegrationTest is Test {
         // Deploy cooperative grant manager
         grantManager = new CooperativeGrantManagerV2(
             config.usdcToken,
-            address(coffeeInventoryToken),
+            address(greenfieldProjectManager),
             address(timelock),
-            deployer // admin address
+            deployer, // admin address
+            address(0) // ZK Proof Manager - placeholder for now
         );
         
         // Deploy donation handler

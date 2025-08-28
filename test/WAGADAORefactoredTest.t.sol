@@ -46,7 +46,8 @@ contract WAGADAORefactoredTest is Test {
             config.usdcToken,
             address(greenfieldManager),
             treasury,
-            admin
+            admin,
+            address(0) // ZK Proof Manager - placeholder for now
         );
         
         // Set up permissions

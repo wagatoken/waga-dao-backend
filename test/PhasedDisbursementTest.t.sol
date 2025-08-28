@@ -53,7 +53,8 @@ contract PhasedDisbursementTest is Test {
             address(usdcToken),
             address(greenfieldManager),
             treasury,
-            admin
+            admin,
+            address(0) // ZK Proof Manager - placeholder for now
         );
         
         // Setup roles

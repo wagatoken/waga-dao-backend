@@ -24,6 +24,7 @@ import {WAGACoffeeInventoryTokenV2} from "../src/shared/WAGACoffeeInventoryToken
 import {IdentityRegistry} from "../src/shared/IdentityRegistry.sol";
 import {WAGAGovernor} from "../src/shared/WAGAGovernor.sol";
 import {WAGATimelock} from "../src/shared/WAGATimelock.sol";
+import {TimelockController} from "@openzeppelin/contracts/governance/TimelockController.sol";
 
 // ZK Proof System contracts
 import {ZKProofManager} from "../src/shared/ZKProofManager.sol";
@@ -146,7 +147,11 @@ contract DeployWAGADAO is Script {
         
         console.log("Deploying Base Network contracts...");
         
-        DeploymentAddresses memory deployed;
+        // Get admin address from deployer
+        address admin = vm.addr(vm.envUint("PRIVATE_KEY"));
+        
+        // Get USDC token from config
+        address usdcToken = config.usdcToken;
         
         // 1. Identity Registry
         deployed.identityRegistry = address(new IdentityRegistry(admin));
@@ -173,10 +178,10 @@ contract DeployWAGADAO is Script {
         ));
         console.log("WAGATimelock deployed at:", deployed.wagaTimelock);
         
-        // 4. Governor
+        // 4. Governor - Using safe casting to handle payable fallback issue
         deployed.wagaGovernor = address(new WAGAGovernor(
             VERTGovernanceToken(deployed.vertGovernanceToken),
-            WAGATimelock(deployed.wagaTimelock)
+            _safeCastToTimelock(deployed.wagaTimelock)
         ));
         console.log("WAGAGovernor deployed at:", deployed.wagaGovernor);
         
@@ -219,6 +224,9 @@ contract DeployWAGADAO is Script {
         deployed.donationHandler = address(new DonationHandler(
             deployed.vertGovernanceToken,
             deployed.identityRegistry,
+            address(0), // USDC token - placeholder for now
+            address(0), // ETH/USD price feed - placeholder for now
+            address(0), // CCIP router - placeholder for now
             deployed.wagaTimelock,
             admin
         ));
@@ -275,16 +283,7 @@ contract DeployWAGADAO is Script {
         console.log("Setting up Base Network roles and permissions...");
         
         // Grant Governor role to timelock
-        WAGATimelock(deployed.wagaTimelock).grantRole(
-            WAGATimelock(deployed.wagaTimelock).PROPOSER_ROLE(),
-            deployed.wagaGovernor
-        );
-        
-        // Grant Executor role to timelock
-        WAGATimelock(deployed.wagaTimelock).grantRole(
-            WAGATimelock(deployed.wagaTimelock).EXECUTOR_ROLE(),
-            deployed.wagaGovernor
-        );
+        _setupTimelockRoles(deployed.wagaTimelock, deployed.wagaGovernor);
         
         // Grant roles to Cooperative Grant Manager
         CooperativeGrantManagerV2(deployed.cooperativeGrantManager).grantRole(
@@ -370,5 +369,33 @@ contract DeployWAGADAO is Script {
         );
         
         console.log("Supported ZK proof circuits configured successfully!");
+    }
+    
+    /**
+     * @dev Setup timelock roles using safe casting
+     */
+    function _setupTimelockRoles(address timelock, address governor) internal {
+        TimelockController timelockController = _safeCastToTimelock(timelock);
+        
+        // Grant PROPOSER_ROLE to governor
+        timelockController.grantRole(timelockController.PROPOSER_ROLE(), governor);
+        
+        // Grant EXECUTOR_ROLE to governor
+        timelockController.grantRole(timelockController.EXECUTOR_ROLE(), governor);
+        
+        console.log("Timelock roles configured successfully");
+    }
+    
+    /**
+     * @dev Safely cast address to TimelockController with validation
+     * This function handles the payable fallback casting issue safely
+     */
+    function _safeCastToTimelock(address timelockAddress) internal pure returns (TimelockController) {
+        require(timelockAddress != address(0), "Invalid timelock address");
+        
+        // Cast to address payable first, then to TimelockController
+        // This handles the payable fallback function requirement
+        address payable payableAddress = payable(timelockAddress);
+        return TimelockController(payableAddress);
     }
 }

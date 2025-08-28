@@ -94,9 +94,10 @@ contract BasicTestV2 is Test {
         // 7. Deploy Grant Manager
         grantManager = new CooperativeGrantManagerV2(
             address(usdcToken),
-            address(coffeeInventoryToken),
+            address(greenfieldProjectManager),
             address(timelock),
-            admin
+            admin,
+            address(0) // ZK Proof Manager - placeholder for now
         );
         
         // 8. Deploy Donation Handler
@@ -344,8 +345,8 @@ contract BasicTestV2 is Test {
         assertTrue(grantInfo.isGreenfield, "Not marked as greenfield");
         assertEq(grantInfo.greenfieldProjectId, projectId, "Wrong project ID");
         
-        // Verify project was created and linked
-        assertTrue(coffeeInventoryToken.batchExists(projectId), "Project not created in coffee token");
+        // Verify project was created in greenfield manager
+        assertTrue(greenfieldProjectManager.projectExists(projectId), "Project not created in greenfield manager");
         
         console.log("Greenfield grant created successfully");
         console.log("  - Grant ID:", grantId);

@@ -95,7 +95,8 @@ contract GovernanceWorkflowTest is Test {
             address(usdcToken),
             address(greenfieldProjectManager), // Should be greenfieldProjectManager, not coffeeInventoryToken
             address(timelock), // timelock as treasury
-            admin
+            admin,
+            address(0) // ZK Proof Manager - placeholder for now
         );
         
         donationHandler = new DonationHandler(

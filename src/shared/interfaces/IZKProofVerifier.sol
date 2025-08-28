@@ -28,7 +28,8 @@ interface IZKProofVerifier {
     struct ZKProof {
         ProofType proofType;
         bytes proofData;           // Raw proof data
-        bytes32 publicInputsHash;  // Hash of public inputs
+        bytes publicInputs;        // Actual public inputs (not just hash)
+        bytes32 publicInputsHash;  // Hash of public inputs for integrity
         bytes32 proofHash;         // IPFS hash of proof metadata
         uint256 timestamp;
         address submitter;
@@ -74,11 +75,7 @@ interface IZKProofVerifier {
         uint256 expiryTimestamp
     );
     
-    event VerifierUpdated(
-        ProofType indexed proofType,
-        address indexed oldVerifier,
-        address indexed newVerifier
-    );
+
     
     // ============ CORE FUNCTIONS ============
     
@@ -86,13 +83,15 @@ interface IZKProofVerifier {
      * @notice Submit a zk-proof for verification
      * @param proofType Type of proof (RISC_ZERO or CIRCOM)
      * @param proofData Raw proof data
-     * @param publicInputsHash Hash of public inputs
+     * @param publicInputs Actual public inputs
+     * @param publicInputsHash Hash of public inputs for integrity
      * @param metadata Proof metadata
      * @return proofHash Unique identifier for the submitted proof
      */
     function submitProof(
         ProofType proofType,
         bytes calldata proofData,
+        bytes calldata publicInputs,
         bytes32 publicInputsHash,
         ProofMetadata calldata metadata
     ) external returns (bytes32 proofHash);

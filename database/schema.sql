@@ -621,3 +621,439 @@ JOIN disbursement_schedules ds ON m.schedule_id = ds.schedule_id
 JOIN cooperative_grants cg ON ds.grant_id = cg.grant_id
 JOIN cooperatives c ON cg.cooperative_id = c.cooperative_id
 ORDER BY me.submitted_at DESC;
+
+-- ============================================================================
+-- ZK-PROOF SYSTEM INTEGRATION
+-- ============================================================================
+
+-- Main ZK Proof Registry
+CREATE TABLE zk_proofs (
+    proof_hash VARCHAR(66) PRIMARY KEY,           -- Unique proof identifier
+    proof_type VARCHAR(20) NOT NULL CHECK (proof_type IN ('RISC_ZERO', 'CIRCOM')),
+    
+    -- Proof Data (IPFS references)
+    proof_data_uri TEXT NOT NULL,                 -- IPFS URI for raw proof data
+    public_inputs_uri TEXT NOT NULL,              -- IPFS URI for public inputs
+    metadata_uri TEXT NOT NULL,                   -- IPFS URI for proof metadata
+    
+    -- Proof Metadata
+    proof_name VARCHAR(255) NOT NULL,             -- Human-readable proof name
+    description TEXT,                             -- Proof description
+    version VARCHAR(50) NOT NULL,                 -- Proof version
+    circuit_hash VARCHAR(66) NOT NULL,            -- Hash of the circuit/program
+    
+    -- Submission Details
+    submitter_address VARCHAR(42) NOT NULL,       -- Ethereum address of submitter
+    submitted_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    
+    -- Verification Status
+    verification_status VARCHAR(20) DEFAULT 'PENDING' CHECK (verification_status IN ('PENDING', 'VERIFIED', 'REJECTED', 'EXPIRED')),
+    verified_at TIMESTAMP,
+    verified_by VARCHAR(42),                      -- Validator address
+    verification_reason TEXT,                     -- Success/failure reason
+    gas_used BIGINT,                             -- Gas used for verification
+    
+    -- Expiry Management
+    expiry_timestamp TIMESTAMP NOT NULL,          -- When proof expires
+    is_expired BOOLEAN DEFAULT FALSE,
+    
+    -- Blockchain Integration
+    blockchain_tx_hash VARCHAR(66),               -- Transaction hash
+    block_number BIGINT,                         -- Block number
+    network VARCHAR(50) DEFAULT 'base',           -- Network where proof was submitted
+    
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+-- ZK Proof Types and Use Cases
+CREATE TABLE zk_proof_use_cases (
+    use_case_id SERIAL PRIMARY KEY,
+    proof_hash VARCHAR(66) REFERENCES zk_proofs(proof_hash) ON DELETE CASCADE,
+    
+    -- Use Case Classification
+    use_case_type VARCHAR(50) NOT NULL,           -- 'MILESTONE_VALIDATION', 'COFFEE_QUALITY', 'IDENTITY_VERIFICATION', etc.
+    use_case_subtype VARCHAR(100),                -- More specific classification
+    
+    -- Related Entity References
+    grant_id INTEGER REFERENCES cooperative_grants(grant_id) ON DELETE SET NULL,
+    milestone_id INTEGER REFERENCES milestones(milestone_id) ON DELETE SET NULL,
+    batch_id BIGINT REFERENCES coffee_batches(batch_id) ON DELETE SET NULL,
+    cooperative_id INTEGER REFERENCES cooperatives(cooperative_id) ON DELETE SET NULL,
+    
+    -- Use Case Specific Data
+    use_case_data JSONB,                         -- Flexible storage for use case specific information
+    
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+-- RISC Zero Specific Data
+CREATE TABLE risc_zero_proofs (
+    proof_hash VARCHAR(66) PRIMARY KEY REFERENCES zk_proofs(proof_hash) ON DELETE CASCADE,
+    
+    -- RISC Zero Specific Fields
+    program_hash VARCHAR(66) NOT NULL,            -- Hash of the RISC Zero program
+    image_id VARCHAR(66) NOT NULL,                -- RISC Zero image ID
+    journal_hash VARCHAR(66) NOT NULL,            -- Hash of the execution journal
+    
+    -- Performance Metrics
+    proof_generation_time_ms INTEGER,             -- Time to generate proof in milliseconds
+    proof_size_bytes BIGINT,                     -- Size of the proof in bytes
+    verification_time_ms INTEGER,                 -- Time to verify proof in milliseconds
+    
+    -- Circuit Information
+    circuit_name VARCHAR(255),                    -- Name of the circuit
+    circuit_version VARCHAR(50),                  -- Version of the circuit
+    circuit_parameters JSONB,                     -- Circuit-specific parameters
+    
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+-- Circom Specific Data
+CREATE TABLE circom_proofs (
+    proof_hash VARCHAR(66) PRIMARY KEY REFERENCES zk_proofs(proof_hash) ON DELETE CASCADE,
+    
+    -- Circom Specific Fields
+    circuit_name VARCHAR(255) NOT NULL,           -- Name of the Circom circuit
+    circuit_version VARCHAR(50) NOT NULL,         -- Version of the circuit
+    proving_key_hash VARCHAR(66) NOT NULL,        -- Hash of the proving key
+    verification_key_hash VARCHAR(66) NOT NULL,   -- Hash of the verification key
+    
+    -- Proof Format
+    proof_format VARCHAR(20) DEFAULT 'GROTH16',   -- Proof format (GROTH16, PLONK, etc.)
+    proof_components JSONB,                       -- Proof components (A, B, C for Groth16)
+    
+    -- Circuit Constraints
+    constraint_count INTEGER,                     -- Number of constraints in circuit
+    wire_count INTEGER,                           -- Number of wires in circuit
+    
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+-- Proof Verification History
+CREATE TABLE proof_verification_history (
+    verification_id SERIAL PRIMARY KEY,
+    proof_hash VARCHAR(66) REFERENCES zk_proofs(proof_hash) ON DELETE CASCADE,
+    
+    -- Verification Details
+    verification_attempt TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    verifier_address VARCHAR(42) NOT NULL,        -- Address that attempted verification
+    verification_method VARCHAR(50) NOT NULL,     -- 'ON_CHAIN', 'OFF_CHAIN', 'BATCH'
+    
+    -- Results
+    success BOOLEAN NOT NULL,
+    reason TEXT,                                  -- Success/failure reason
+    gas_used BIGINT,                             -- Gas used for verification
+    verification_time_ms INTEGER,                 -- Time taken for verification
+    
+    -- Blockchain Details
+    tx_hash VARCHAR(66),                         -- Transaction hash if on-chain
+    block_number BIGINT,                         -- Block number if on-chain
+    
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+-- ============================================================================
+-- ZK-PROOF INTEGRATION WITH EXISTING TABLES
+-- ============================================================================
+
+-- Enhanced Milestones Table with ZK-Proof Support
+ALTER TABLE milestones ADD COLUMN zk_proof_hash VARCHAR(66) REFERENCES zk_proofs(proof_hash);
+ALTER TABLE milestones ADD COLUMN zk_proof_type VARCHAR(20) CHECK (zk_proof_type IN ('RISC_ZERO', 'CIRCOM'));
+ALTER TABLE milestones ADD COLUMN zk_proof_verified BOOLEAN DEFAULT FALSE;
+ALTER TABLE milestones ADD COLUMN zk_proof_verification_timestamp TIMESTAMP;
+
+-- Enhanced Coffee Batches with ZK-Proof Support
+ALTER TABLE coffee_batches ADD COLUMN quality_proof_hash VARCHAR(66) REFERENCES zk_proofs(proof_hash);
+ALTER TABLE coffee_batches ADD COLUMN quality_proof_type VARCHAR(20) CHECK (quality_proof_type IN ('RISC_ZERO', 'CIRCOM'));
+ALTER TABLE coffee_batches ADD COLUMN quality_proof_verified BOOLEAN DEFAULT FALSE;
+
+-- Enhanced Cooperatives with ZK-Proof Support
+ALTER TABLE cooperatives ADD COLUMN identity_proof_hash VARCHAR(66) REFERENCES zk_proofs(proof_hash);
+ALTER TABLE cooperatives ADD COLUMN identity_proof_type VARCHAR(20) CHECK (identity_proof_type IN ('RISC_ZERO', 'CIRCOM'));
+ALTER TABLE cooperatives ADD COLUMN identity_proof_verified BOOLEAN DEFAULT FALSE;
+
+-- ============================================================================
+-- ZK-PROOF INDEXES FOR PERFORMANCE
+-- ============================================================================
+
+-- Note: These indexes will be created after all tables exist
+-- They are moved to the end of the schema for proper execution order
+
+-- ============================================================================
+-- ZK-PROOF VIEWS FOR COMMON QUERIES
+-- ============================================================================
+
+-- ZK Proof Status Overview
+CREATE VIEW zk_proof_status_overview AS
+SELECT 
+    zp.proof_hash,
+    zp.proof_type,
+    zp.proof_name,
+    zp.verification_status,
+    zp.submitter_address,
+    zp.submitted_at,
+    zp.verified_at,
+    zp.verification_reason,
+    zp.gas_used,
+    
+    -- Use case information
+    zuc.use_case_type,
+    zuc.use_case_subtype,
+    zuc.grant_id,
+    zuc.milestone_id,
+    zuc.batch_id,
+    zuc.cooperative_id,
+    
+    -- Expiry information
+    zp.expiry_timestamp,
+    zp.is_expired,
+    CASE 
+        WHEN zp.expiry_timestamp < CURRENT_TIMESTAMP THEN 'EXPIRED'
+        WHEN zp.expiry_timestamp < CURRENT_TIMESTAMP + INTERVAL '1 day' THEN 'EXPIRING_SOON'
+        ELSE 'VALID'
+    END as expiry_status
+    
+FROM zk_proofs zp
+LEFT JOIN zk_proof_use_cases zuc ON zp.proof_hash = zuc.proof_hash
+ORDER BY zp.submitted_at DESC;
+
+-- Milestone ZK-Proof Status
+CREATE VIEW milestone_zk_proof_status AS
+SELECT 
+    m.milestone_id,
+    m.schedule_id,
+    ds.grant_id,
+    cg.cooperative_id,
+    c.name as cooperative_name,
+    m.milestone_index,
+    m.description,
+    m.percentage_share,
+    m.is_completed,
+    
+    -- ZK Proof information
+    m.zk_proof_hash,
+    m.zk_proof_type,
+    m.zk_proof_verified,
+    m.zk_proof_verification_timestamp,
+    
+    -- Proof details
+    zp.verification_status as proof_status,
+    zp.verification_reason as proof_reason,
+    zp.gas_used as proof_gas_used,
+    zp.expiry_timestamp as proof_expiry
+    
+FROM milestones m
+JOIN disbursement_schedules ds ON m.schedule_id = ds.schedule_id
+JOIN cooperative_grants cg ON ds.grant_id = cg.grant_id
+JOIN cooperatives c ON cg.cooperative_id = c.cooperative_id
+LEFT JOIN zk_proofs zp ON m.zk_proof_hash = zp.proof_hash
+ORDER BY ds.grant_id, m.milestone_index;
+
+-- Coffee Quality ZK-Proof Status
+CREATE VIEW coffee_quality_zk_proof_status AS
+SELECT 
+    cb.batch_id,
+    cb.production_date,
+    cb.quantity_kg,
+    cb.price_per_kg,
+    cb.token_type,
+    
+    -- ZK Proof information
+    cb.quality_proof_hash,
+    cb.quality_proof_type,
+    cb.quality_proof_verified,
+    
+    -- Proof details
+    zp.verification_status as proof_status,
+    zp.verification_reason as proof_reason,
+    zp.submitted_at as proof_submitted,
+    zp.verified_at as proof_verified,
+    
+    -- Use case data
+    zuc.use_case_data as quality_metrics
+    
+FROM coffee_batches cb
+LEFT JOIN zk_proofs zp ON cb.quality_proof_hash = zp.proof_hash
+LEFT JOIN zk_proof_use_cases zuc ON cb.quality_proof_hash = zuc.proof_hash
+WHERE cb.quality_proof_hash IS NOT NULL
+ORDER BY cb.production_date DESC;
+
+-- ZK Proof Performance Metrics
+CREATE VIEW zk_proof_performance_metrics AS
+SELECT 
+    zp.proof_type,
+    COUNT(*) as total_proofs,
+    COUNT(CASE WHEN zp.verification_status = 'VERIFIED' THEN 1 END) as verified_proofs,
+    COUNT(CASE WHEN zp.verification_status = 'REJECTED' THEN 1 END) as rejected_proofs,
+    COUNT(CASE WHEN zp.verification_status = 'EXPIRED' THEN 1 END) as expired_proofs,
+    
+    -- Average gas usage
+    AVG(zp.gas_used) as avg_gas_used,
+    MAX(zp.gas_used) as max_gas_used,
+    MIN(zp.gas_used) as min_gas_used,
+    
+    -- Success rate
+    ROUND(
+        (COUNT(CASE WHEN zp.verification_status = 'VERIFIED' THEN 1 END)::DECIMAL / COUNT(*)::DECIMAL * 100), 2
+    ) as success_rate_percent
+    
+FROM zk_proofs zp
+GROUP BY zp.proof_type;
+
+-- ============================================================================
+-- ZK-PROOF FUNCTIONS AND TRIGGERS
+-- ============================================================================
+
+-- Function to automatically expire proofs
+CREATE OR REPLACE FUNCTION expire_zk_proofs()
+RETURNS INTEGER AS $$
+DECLARE
+    expired_count INTEGER := 0;
+BEGIN
+    UPDATE zk_proofs 
+    SET 
+        verification_status = 'EXPIRED',
+        is_expired = TRUE,
+        updated_at = CURRENT_TIMESTAMP
+    WHERE 
+        expiry_timestamp < CURRENT_TIMESTAMP 
+        AND verification_status = 'PENDING'
+        AND is_expired = FALSE;
+    
+    GET DIAGNOSTICS expired_count = ROW_COUNT;
+    
+    RETURN expired_count;
+END;
+$$ LANGUAGE plpgsql;
+
+-- Function to update proof verification status
+CREATE OR REPLACE FUNCTION update_proof_verification_status()
+RETURNS TRIGGER AS $$
+BEGIN
+    -- Update the main proof status
+    UPDATE zk_proofs 
+    SET 
+        verification_status = NEW.verification_status,
+        verified_at = CASE WHEN NEW.verification_status = 'VERIFIED' THEN CURRENT_TIMESTAMP ELSE NULL END,
+        verified_by = CASE WHEN NEW.verification_status = 'VERIFIED' THEN NEW.verifier_address ELSE NULL END,
+        verification_reason = NEW.verification_reason,
+        gas_used = NEW.gas_used,
+        updated_at = CURRENT_TIMESTAMP
+    WHERE proof_hash = NEW.proof_hash;
+    
+    -- Update related milestone if this is a milestone proof
+    UPDATE milestones 
+    SET 
+        zk_proof_verified = CASE WHEN NEW.verification_status = 'VERIFIED' THEN TRUE ELSE FALSE END,
+        zk_proof_verification_timestamp = CASE WHEN NEW.verification_status = 'VERIFIED' THEN CURRENT_TIMESTAMP ELSE NULL END
+    WHERE zk_proof_hash = NEW.proof_hash;
+    
+    RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+-- Trigger to automatically update proof status
+CREATE TRIGGER trigger_update_proof_verification_status
+    AFTER INSERT ON proof_verification_history
+    FOR EACH ROW
+    EXECUTE FUNCTION update_proof_verification_status();
+
+-- ============================================================================
+-- SAMPLE ZK-PROOF DATA INSERTION
+-- ============================================================================
+
+-- Insert sample RISC Zero circuit support
+INSERT INTO zk_proofs (
+    proof_hash, proof_type, proof_data_uri, public_inputs_uri, metadata_uri,
+    proof_name, description, version, circuit_hash, submitter_address,
+    expiry_timestamp, network
+) VALUES (
+    '0x1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef',
+    'RISC_ZERO',
+    'ipfs://QmSampleRISCZeroProof',
+    'ipfs://QmSamplePublicInputs',
+    'ipfs://QmSampleMetadata',
+    'Coffee Quality Algorithm V1',
+    'RISC Zero proof for coffee quality scoring algorithm',
+    '1.0.0',
+    '0xabcdef1234567890abcdef1234567890abcdef1234567890abcdef1234567890',
+    '0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266',
+    CURRENT_TIMESTAMP + INTERVAL '7 days',
+    'base'
+);
+
+-- Insert sample Circom circuit support
+INSERT INTO zk_proofs (
+    proof_hash, proof_type, proof_data_uri, public_inputs_uri, metadata_uri,
+    proof_name, description, version, circuit_hash, submitter_address,
+    expiry_timestamp, network
+) VALUES (
+    '0xabcdef1234567890abcdef1234567890abcdef1234567890abcdef1234567890',
+    'CIRCOM',
+    'ipfs://QmSampleCircomProof',
+    'ipfs://QmSamplePublicInputs',
+    'ipfs://QmSampleMetadata',
+    'Milestone Completion V1',
+    'Circom proof for milestone completion verification',
+    '1.0.0',
+    '0x1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef',
+    '0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266',
+    CURRENT_TIMESTAMP + INTERVAL '30 days',
+    'base'
+);
+
+-- Insert sample use cases
+INSERT INTO zk_proof_use_cases (
+    proof_hash, use_case_type, use_case_subtype, grant_id, milestone_id
+) VALUES (
+    '0x1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef',
+    'COFFEE_QUALITY',
+    'QUALITY_SCORING',
+    NULL,
+    NULL
+);
+
+INSERT INTO zk_proof_use_cases (
+    proof_hash, use_case_type, use_case_subtype, grant_id, milestone_id
+) VALUES (
+    '0xabcdef1234567890abcdef1234567890abcdef1234567890abcdef1234567890',
+    'MILESTONE_VALIDATION',
+    'COMPLETION_VERIFICATION',
+    NULL,
+    NULL
+);
+
+-- ============================================================================
+-- ZK-PROOF INDEXES FOR PERFORMANCE (CREATED AFTER ALL TABLES EXIST)
+-- ============================================================================
+
+-- ZK Proofs Indexes
+CREATE INDEX idx_zk_proofs_type ON zk_proofs(proof_type);
+CREATE INDEX idx_zk_proofs_status ON zk_proofs(verification_status);
+CREATE INDEX idx_zk_proofs_submitter ON zk_proofs(submitter_address);
+CREATE INDEX idx_zk_proofs_circuit ON zk_proofs(circuit_hash);
+CREATE INDEX idx_zk_proofs_expiry ON zk_proofs(expiry_timestamp);
+CREATE INDEX idx_zk_proofs_network ON zk_proofs(network);
+
+-- Use Cases Indexes
+CREATE INDEX idx_zk_proof_use_cases_type ON zk_proof_use_cases(use_case_type);
+CREATE INDEX idx_zk_proof_use_cases_grant ON zk_proof_use_cases(grant_id);
+CREATE INDEX idx_zk_proof_use_cases_milestone ON zk_proof_use_cases(milestone_id);
+CREATE INDEX idx_zk_proof_use_cases_batch ON zk_proof_use_cases(batch_id);
+
+-- RISC Zero Indexes
+CREATE INDEX idx_risc_zero_proofs_program ON risc_zero_proofs(program_hash);
+CREATE INDEX idx_risc_zero_proofs_image ON risc_zero_proofs(image_id);
+CREATE INDEX idx_risc_zero_proofs_circuit ON risc_zero_proofs(circuit_name);
+
+-- Circom Indexes
+CREATE INDEX idx_circom_proofs_circuit ON circom_proofs(circuit_name);
+CREATE INDEX idx_circom_proofs_version ON circom_proofs(circuit_version);
+CREATE INDEX idx_circom_proofs_format ON circom_proofs(proof_format);
+
+-- Verification History Indexes
+CREATE INDEX idx_proof_verification_history_proof ON proof_verification_history(proof_hash);
+CREATE INDEX idx_proof_verification_history_verifier ON proof_verification_history(verifier_address);
+CREATE INDEX idx_proof_verification_history_success ON proof_verification_history(success);
+CREATE INDEX idx_proof_verification_history_timestamp ON proof_verification_history(verification_attempt);

@@ -10,6 +10,7 @@ import {SafeERC20} from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol
 import {ICooperativeGrantManager} from "../shared/interfaces/ICooperativeGrantManager.sol";
 import {IWAGACoffeeInventoryToken} from "../shared/interfaces/IWAGACoffeeInventoryToken.sol";
 import {GreenfieldProjectManager} from "../managers/GreenfieldProjectManager.sol";
+import {IZKProofVerifier} from "../shared/interfaces/IZKProofVerifier.sol";
 
 /**
  * @title CooperativeGrantManagerV2 - Refactored Grant Management System
@@ -37,6 +38,7 @@ contract CooperativeGrantManagerV2 is
     bytes32 public constant FINANCIAL_ROLE = keccak256("FINANCIAL_ROLE");
     bytes32 public constant REVENUE_MANAGER_ROLE = keccak256("REVENUE_MANAGER_ROLE");
     bytes32 public constant MILESTONE_VALIDATOR_ROLE = keccak256("MILESTONE_VALIDATOR_ROLE");
+    bytes32 public constant ZK_PROOF_MANAGER_ROLE = keccak256("ZK_PROOF_MANAGER_ROLE");
     
     uint256 public constant MAX_REVENUE_SHARE = 5000; // 50% in basis points
     uint256 public constant MAX_DURATION_YEARS = 10;
@@ -54,6 +56,9 @@ contract CooperativeGrantManagerV2 is
     
     /// @dev Treasury address for receiving revenue shares
     address public treasury;
+    
+    /// @dev ZK Proof Manager for privacy-preserving milestone validation
+    IZKProofVerifier public zkProofManager;
     
     /// @dev Next grant ID counter
     uint256 public override nextGrantId = 1;
@@ -86,12 +91,32 @@ contract CooperativeGrantManagerV2 is
     
     /// @dev Total amount held in escrow across all grants
     uint256 public totalEscrowBalance;
+    
+    /// @dev Mapping of milestone to zk-proof hash
+    mapping(uint256 => mapping(uint256 => bytes32)) public milestoneProofs; // grantId => milestoneIndex => proofHash
 
     // ============ ADDITIONAL EVENTS ============
     
     event TreasuryUpdated(address indexed oldTreasury, address indexed newTreasury);
     event GrantDisbursed(uint256 indexed grantId, uint256 amount, address indexed recipient);
     event CommodityPriceUpdated(uint256 oldPrice, uint256 newPrice);
+    event ZKProofManagerUpdated(address indexed oldManager, address indexed newManager);
+    event MilestoneProofSubmitted(uint256 indexed grantId, uint256 indexed milestoneIndex, bytes32 indexed proofHash, IZKProofVerifier.ProofType proofType);
+
+    // ============ ERRORS ============
+    
+    error CooperativeGrantManager__InvalidTokenAddress();
+    error CooperativeGrantManager__InvalidGreenfieldManager();
+    error CooperativeGrantManager__InvalidTreasury();
+    error CooperativeGrantManager__InvalidAdmin();
+    error CooperativeGrantManager__GrantNotFound();
+    error CooperativeGrantManager__GrantAlreadyCompleted();
+    error CooperativeGrantManager__GrantNotActive();
+    error CooperativeGrantManager__InvalidMilestoneIndex();
+    error CooperativeGrantManager__MilestoneAlreadyCompleted();
+    error CooperativeGrantManager__InvalidProofHash();
+    error CooperativeGrantManager__ProofVerificationFailed();
+    error CooperativeGrantManager__InvalidZKProofManager();
 
     // ============ CONSTRUCTOR ============
     
@@ -99,22 +124,25 @@ contract CooperativeGrantManagerV2 is
         address _usdcToken,
         address _greenfieldManager,
         address _treasury,
-        address _admin
+        address _admin,
+        address _zkProofManager
     ) {
-        require(_usdcToken != address(0), "Invalid USDC token");
-        require(_greenfieldManager != address(0), "Invalid greenfield manager");
-        require(_treasury != address(0), "Invalid treasury");
-        require(_admin != address(0), "Invalid admin");
+        if (_usdcToken == address(0)) revert CooperativeGrantManagerV2__InvalidTokenAddress();
+        if (_greenfieldManager == address(0)) revert CooperativeGrantManagerV2__InvalidGreenfieldManager();
+        if (_treasury == address(0)) revert CooperativeGrantManagerV2__InvalidTreasury();
+        if (_admin == address(0)) revert CooperativeGrantManagerV2__InvalidAdmin();
         
         usdcToken = IERC20(_usdcToken);
         greenfieldManager = GreenfieldProjectManager(_greenfieldManager);
         treasury = _treasury;
+        zkProofManager = IZKProofVerifier(_zkProofManager);
         
         _grantRole(DEFAULT_ADMIN_ROLE, _admin);
         _grantRole(GRANT_MANAGER_ROLE, _admin);
         _grantRole(FINANCIAL_ROLE, _admin);
         _grantRole(REVENUE_MANAGER_ROLE, _admin);
-        _grantRole(MILESTONE_VALIDATOR_ROLE, _admin); // Admin can validate milestones
+        _grantRole(MILESTONE_VALIDATOR_ROLE, _admin);
+        _grantRole(ZK_PROOF_MANAGER_ROLE, _admin);
     }
 
     // ============ GRANT CREATION ============
@@ -474,6 +502,142 @@ contract CooperativeGrantManagerV2 is
         }
     }
 
+    // ============ ZK-PROOF INTEGRATION FUNCTIONS ============
+    
+    /**
+     * @notice Submit a zk-proof for milestone validation
+     * @param grantId ID of the grant
+     * @param milestoneIndex Index of the milestone
+     * @param proofType Type of zk-proof (RISC_ZERO or CIRCOM)
+     * @param proofData Raw proof data
+     * @param publicInputsHash Hash of public inputs
+     * @param metadata Proof metadata
+     * @return proofHash Hash of the submitted proof
+     */
+    function submitMilestoneProof(
+        uint256 grantId,
+        uint256 milestoneIndex,
+        IZKProofVerifier.ProofType proofType,
+        bytes calldata proofData,
+        bytes32 publicInputsHash,
+        IZKProofVerifier.ProofMetadata calldata metadata
+    ) external onlyRole(ZK_PROOF_MANAGER_ROLE) returns (bytes32 proofHash) {
+        
+        // Validate grant and milestone
+        if (!_grantExists(grantId)) revert CooperativeGrantManagerV2__GrantNotFound();
+        if (milestoneIndex >= disbursementSchedules[grantId].totalMilestones) {
+            revert CooperativeGrantManagerV2__InvalidMilestoneIndex();
+        }
+        
+        // Submit proof to ZK Proof Manager
+        proofHash = zkProofManager.submitProof(
+            proofType,
+            proofData,
+            publicInputsHash,
+            metadata
+        );
+        
+        // Store proof hash for milestone
+        milestoneProofs[grantId][milestoneIndex] = proofHash;
+        
+        emit MilestoneProofSubmitted(grantId, milestoneIndex, proofHash, proofType);
+        
+        return proofHash;
+    }
+    
+    /**
+     * @notice Validate milestone using zk-proof
+     * @param grantId ID of the grant
+     * @param milestoneIndex Index of the milestone
+     * @param proofHash Hash of the proof to validate
+     * @return success Whether validation was successful
+     */
+    function validateMilestoneWithProof(
+        uint256 grantId,
+        uint256 milestoneIndex,
+        bytes32 proofHash
+    ) external onlyRole(MILESTONE_VALIDATOR_ROLE) returns (bool success) {
+        
+        // Validate grant and milestone
+        if (!_grantExists(grantId)) revert CooperativeGrantManagerV2__GrantNotFound();
+        if (milestoneIndex >= disbursementSchedules[grantId].totalMilestones) {
+            revert CooperativeGrantManagerV2__InvalidMilestoneIndex();
+        }
+        
+        // Check if proof hash matches stored proof
+        if (milestoneProofs[grantId][milestoneIndex] != proofHash) {
+            revert CooperativeGrantManagerV2__InvalidProofHash();
+        }
+        
+        // Verify the zk-proof
+        IZKProofVerifier.VerificationResult memory result = zkProofManager.verifyProof(proofHash);
+        
+        if (!result.success) {
+            revert CooperativeGrantManagerV2__ProofVerificationFailed();
+        }
+        
+        // Mark milestone as completed
+        DisbursementSchedule storage schedule = disbursementSchedules[grantId];
+        MilestoneInfo storage milestone = schedule.milestones[milestoneIndex];
+        
+        if (milestone.isCompleted) {
+            revert CooperativeGrantManagerV2__MilestoneAlreadyCompleted();
+        }
+        
+        milestone.isCompleted = true;
+        milestone.completedTimestamp = block.timestamp;
+        milestone.validator = msg.sender;
+        milestone.evidenceUri = string(abi.encodePacked("zk-proof:", proofHash));
+        
+        // Calculate disbursement amount
+        uint256 disbursementAmount = (schedule.escrowedAmount * milestone.percentageShare) / BASIS_POINTS;
+        milestone.disbursedAmount = disbursementAmount;
+        
+        // Update schedule
+        schedule.completedMilestones++;
+        
+        // Transfer funds to cooperative
+        address cooperative = grants[grantId].cooperative;
+        usdcToken.safeTransfer(cooperative, disbursementAmount);
+        
+        // Update escrow balance
+        grantEscrowBalances[grantId] -= disbursementAmount;
+        totalEscrowBalance -= disbursementAmount;
+        
+        emit MilestoneCompleted(
+            grantId,
+            milestoneIndex,
+            milestone.evidenceUri,
+            msg.sender,
+            disbursementAmount
+        );
+        
+        return true;
+    }
+    
+    /**
+     * @notice Get zk-proof hash for a milestone
+     * @param grantId ID of the grant
+     * @param milestoneIndex Index of the milestone
+     * @return proofHash Hash of the proof
+     */
+    function getMilestoneProofHash(uint256 grantId, uint256 milestoneIndex) external view returns (bytes32 proofHash) {
+        return milestoneProofs[grantId][milestoneIndex];
+    }
+    
+    /**
+     * @notice Check if milestone has a valid zk-proof
+     * @param grantId ID of the grant
+     * @param milestoneIndex Index of the milestone
+     * @return hasValidProof Whether milestone has a valid proof
+     */
+    function hasValidMilestoneProof(uint256 grantId, uint256 milestoneIndex) external view returns (bool hasValidProof) {
+        bytes32 proofHash = milestoneProofs[grantId][milestoneIndex];
+        if (proofHash == bytes32(0)) return false;
+        
+        return zkProofManager.isProofValid(proofHash);
+    }
+    
     // ============ VIEW FUNCTIONS ============
 
     /**
@@ -539,77 +703,6 @@ contract CooperativeGrantManagerV2 is
         currentCommodityPrice = newPrice;
         
         emit CommodityPriceUpdated(oldPrice, newPrice);
-    }
-
-    // ============ INTERNAL FUNCTIONS ============
-
-    /**
-     * @dev Creates a grant internally with all required fields
-     */
-    function _createGrantInternal(
-        address cooperative,
-        uint256 amount,
-        uint256 revenueSharePercentage,
-        uint256 durationYears,
-        string memory description,
-        bool isGreenfield,
-        uint256 projectId
-    ) internal returns (uint256 grantId) {
-        grantId = nextGrantId++;
-        
-        grants[grantId] = GrantInfo({
-            cooperative: cooperative,
-            amount: amount,
-            disbursedAmount: 0,
-            daoOwnershipPercent: 0, // Set to 0 for grants (vs equity)
-            revenueSharePercent: revenueSharePercentage,
-            startTime: block.timestamp,
-            maturityTime: block.timestamp + (durationYears * 365 days),
-            batchIds: new uint256[](0), // Will be set later for non-greenfield
-            totalRevenueShared: 0,
-            minimumRevenueTarget: amount, // Set minimum target to grant amount
-            status: GrantStatus.Pending,
-            purpose: description,
-            cooperativeName: "", // To be set externally if needed
-            location: "", // To be set externally if needed
-            isGreenfield: isGreenfield,
-            greenfieldProjectId: projectId,
-            pricingInfo: PricingInfo({
-                commodityPrice: currentCommodityPrice,
-                premiumPercentage: 1000, // 10% premium
-                guaranteedMinPrice: 0, // To be calculated when needed
-                lastPriceUpdate: block.timestamp,
-                isPricingActive: true
-            })
-        });
-        
-        // Track grants
-        cooperativeGrants[cooperative].push(grantId);
-        
-        return grantId;
-    }
-
-    /**
-     * @dev Completes a grant internally
-     */
-    function _completeGrant(uint256 grantId) internal {
-        GrantInfo storage grant = grants[grantId];
-        
-        if (grant.status != GrantStatus.Active) {
-            if (grant.status == GrantStatus.Completed) {
-                revert CooperativeGrantManager__GrantAlreadyCompleted();
-            }
-            revert CooperativeGrantManager__GrantNotActive();
-        }
-        
-        // Determine completion status based on time and revenue
-        if (block.timestamp >= grant.maturityTime) {
-            grant.status = GrantStatus.Matured;
-        } else {
-            grant.status = GrantStatus.Completed;
-        }
-        
-        emit GrantCompleted(grantId, grant.totalRevenueShared);
     }
 
     // ============ ADMIN FUNCTIONS ============
@@ -696,6 +789,99 @@ contract CooperativeGrantManagerV2 is
      */
     function hasActiveDisbursementSchedule(uint256 grantId) external view returns (bool hasSchedule) {
         return disbursementSchedules[grantId].isActive;
+    }
+
+    /**
+     * @notice Update ZK Proof Manager
+     * @param newZKProofManager Address of the new ZK Proof Manager
+     */
+    function updateZKProofManager(address newZKProofManager) external onlyRole(DEFAULT_ADMIN_ROLE) {
+        if (newZKProofManager == address(0)) revert CooperativeGrantManagerV2__InvalidZKProofManager();
+        
+        address oldManager = address(zkProofManager);
+        zkProofManager = IZKProofVerifier(newZKProofManager);
+        
+        emit ZKProofManagerUpdated(oldManager, newZKProofManager);
+    }
+
+    // ============ INTERNAL FUNCTIONS ============
+
+    /**
+     * @dev Creates a grant internally with all required fields
+     */
+    function _createGrantInternal(
+        address cooperative,
+        uint256 amount,
+        uint256 revenueSharePercentage,
+        uint256 durationYears,
+        string memory description,
+        bool isGreenfield,
+        uint256 projectId
+    ) internal returns (uint256 grantId) {
+        grantId = nextGrantId++;
+        
+        grants[grantId] = GrantInfo({
+            cooperative: cooperative,
+            amount: amount,
+            disbursedAmount: 0,
+            daoOwnershipPercent: 0, // Set to 0 for grants (vs equity)
+            revenueSharePercent: revenueSharePercentage,
+            startTime: block.timestamp,
+            maturityTime: block.timestamp + (durationYears * 365 days),
+            batchIds: new uint256[](0), // Will be set later for non-greenfield
+            totalRevenueShared: 0,
+            minimumRevenueTarget: amount, // Set minimum target to grant amount
+            status: GrantStatus.Pending,
+            purpose: description,
+            cooperativeName: "", // To be set externally if needed
+            location: "", // To be set externally if needed
+            isGreenfield: isGreenfield,
+            greenfieldProjectId: projectId,
+            pricingInfo: PricingInfo({
+                commodityPrice: currentCommodityPrice,
+                premiumPercentage: 1000, // 10% premium
+                guaranteedMinPrice: 0, // To be calculated when needed
+                lastPriceUpdate: block.timestamp,
+                isPricingActive: true
+            })
+        });
+        
+        // Track grants
+        cooperativeGrants[cooperative].push(grantId);
+        
+        return grantId;
+    }
+
+    /**
+     * @dev Completes a grant internally
+     */
+    function _completeGrant(uint256 grantId) internal {
+        GrantInfo storage grant = grants[grantId];
+        
+        if (grant.status != GrantStatus.Active) {
+            if (grant.status == GrantStatus.Completed) {
+                revert CooperativeGrantManager__GrantAlreadyCompleted();
+            }
+            revert CooperativeGrantManager__GrantNotActive();
+        }
+        
+        // Determine completion status based on time and revenue
+        if (block.timestamp >= grant.maturityTime) {
+            grant.status = GrantStatus.Matured;
+        } else {
+            grant.status = GrantStatus.Completed;
+        }
+        
+        emit GrantCompleted(grantId, grant.totalRevenueShared);
+    }
+
+    /**
+     * @dev Check if grant exists
+     * @param grantId ID of the grant
+     * @return exists Whether grant exists
+     */
+    function _grantExists(uint256 grantId) internal view returns (bool exists) {
+        return grants[grantId].cooperative != address(0);
     }
 }
 

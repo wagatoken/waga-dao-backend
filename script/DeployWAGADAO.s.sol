@@ -25,6 +25,11 @@ import {IdentityRegistry} from "../src/shared/IdentityRegistry.sol";
 import {WAGAGovernor} from "../src/shared/WAGAGovernor.sol";
 import {WAGATimelock} from "../src/shared/WAGATimelock.sol";
 
+// ZK Proof System contracts
+import {ZKProofManager} from "../src/shared/ZKProofManager.sol";
+import {RISCZeroVerifier} from "../src/shared/verifiers/RISCZeroVerifier.sol";
+import {CircomVerifier} from "../src/shared/verifiers/CircomVerifier.sol";
+
 /**
  * @title DeployWAGADAO
  * @dev Multi-chain deployment script for WAGA DAO
@@ -63,6 +68,11 @@ contract DeployWAGADAO is Script {
         address cooperativeGrantManager;
         address wagaGovernor;
         address wagaTimelock;
+        
+        // ZK Proof System
+        address riscZeroVerifier;
+        address circomVerifier;
+        address zkProofManager;
         
         // Arbitrum contracts
         address arbitrumLendingManager;
@@ -134,75 +144,91 @@ contract DeployWAGADAO is Script {
     function _deployBaseContracts() internal returns (DeploymentAddresses memory deployed) {
         HelperConfig.NetworkConfig memory config = helperConfig.getConfigByChainId(block.chainid);
         
-        console.log("Deploying on Base Network...");
+        console.log("Deploying Base Network contracts...");
         
-        // 1. Deploy IdentityRegistry
-        IdentityRegistry identityRegistry = new IdentityRegistry(msg.sender);
-        deployed.identityRegistry = address(identityRegistry);
+        DeploymentAddresses memory deployed;
         
-        // 2. Deploy VERTGovernanceToken
-        VERTGovernanceToken vertToken = new VERTGovernanceToken(
-            address(identityRegistry),
-            msg.sender
-        );
-        deployed.vertGovernanceToken = address(vertToken);
+        // 1. Identity Registry
+        deployed.identityRegistry = address(new IdentityRegistry(admin));
+        console.log("IdentityRegistry deployed at:", deployed.identityRegistry);
         
-        // 3. Deploy Timelock
+        // 2. VERT Governance Token
+        deployed.vertGovernanceToken = address(new VERTGovernanceToken(
+            deployed.identityRegistry,
+            admin
+        ));
+        console.log("VERTGovernanceToken deployed at:", deployed.vertGovernanceToken);
+        
+        // 3. Timelock Controller
         address[] memory proposers = new address[](1);
         address[] memory executors = new address[](1);
-        proposers[0] = msg.sender;
-        executors[0] = msg.sender;
+        proposers[0] = admin;
+        executors[0] = admin;
         
-        WAGATimelock timelock = new WAGATimelock(
+        deployed.wagaTimelock = address(new WAGATimelock(
             2 days,
             proposers,
             executors,
-            msg.sender
-        );
-        deployed.wagaTimelock = address(timelock);
+            admin
+        ));
+        console.log("WAGATimelock deployed at:", deployed.wagaTimelock);
         
-        // 4. Deploy Governor
-        WAGAGovernor governor = new WAGAGovernor(vertToken, timelock);
-        deployed.wagaGovernor = address(governor);
+        // 4. Governor
+        deployed.wagaGovernor = address(new WAGAGovernor(
+            VERTGovernanceToken(deployed.vertGovernanceToken),
+            WAGATimelock(deployed.wagaTimelock)
+        ));
+        console.log("WAGAGovernor deployed at:", deployed.wagaGovernor);
         
-        // 5. Deploy GreenfieldProjectManager first
-        GreenfieldProjectManager greenfieldManager = new GreenfieldProjectManager(msg.sender);
+        // 5. Greenfield Project Manager
+        GreenfieldProjectManager greenfieldManager = new GreenfieldProjectManager(admin);
+        console.log("GreenfieldProjectManager deployed at:", address(greenfieldManager));
         
-        // 6. Deploy Coffee Inventory Token
-        WAGACoffeeInventoryTokenV2 coffeeToken = new WAGACoffeeInventoryTokenV2(
-            msg.sender,
+        // 6. Coffee Inventory Token
+        deployed.coffeeInventoryToken = address(new WAGACoffeeInventoryTokenV2(
+            admin,
             address(greenfieldManager)
-        );
-        deployed.coffeeInventoryToken = address(coffeeToken);
+        ));
+        console.log("WAGACoffeeInventoryTokenV2 deployed at:", deployed.coffeeInventoryToken);
         
-        // 6. Deploy DonationHandler with CCIP support
-        DonationHandler donationHandler = new DonationHandler(
-            address(vertToken),
-            address(identityRegistry),
-            config.usdcToken,
-            config.ethUsdPriceFeed,
-            config.ccipRouter,
-            msg.sender, // treasury
-            msg.sender  // initial owner
-        );
-        deployed.donationHandler = address(donationHandler);
+        // 7. ZK Proof System
+        deployed.riscZeroVerifier = address(new RISCZeroVerifier(admin));
+        console.log("RISCZeroVerifier deployed at:", deployed.riscZeroVerifier);
         
-        // 7. Deploy Cooperative Grant Manager
-        CooperativeGrantManagerV2 grantManager = new CooperativeGrantManagerV2(
-            config.usdcToken,
-            address(coffeeToken),
-            msg.sender, // treasury
-            msg.sender  // initial admin
-        );
-        deployed.cooperativeGrantManager = address(grantManager);
+        deployed.circomVerifier = address(new CircomVerifier(admin));
+        console.log("CircomVerifier deployed at:", deployed.circomVerifier);
         
-        // 8. Configure CCIP (allow Ethereum mainnet)
-        DonationHandler(donationHandler).setCCIPConfig(config.ethereumChainSelector, true);
+        deployed.zkProofManager = address(new ZKProofManager(
+            deployed.riscZeroVerifier,
+            deployed.circomVerifier,
+            admin
+        ));
+        console.log("ZKProofManager deployed at:", deployed.zkProofManager);
         
-        // 9. Setup roles and permissions
-        _setupBaseRoles(vertToken, identityRegistry, donationHandler, governor, timelock, coffeeToken, grantManager);
+        // 8. Cooperative Grant Manager (with ZK Proof integration)
+        deployed.cooperativeGrantManager = address(new CooperativeGrantManagerV2(
+            address(usdcToken),
+            address(greenfieldManager),
+            deployed.wagaTimelock, // Use timelock as treasury
+            admin,
+            deployed.zkProofManager // ZK Proof Manager integration
+        ));
+        console.log("CooperativeGrantManagerV2 deployed at:", deployed.cooperativeGrantManager);
         
-        console.log("Base ecosystem deployed successfully");
+        // 9. Donation Handler
+        deployed.donationHandler = address(new DonationHandler(
+            deployed.vertGovernanceToken,
+            deployed.identityRegistry,
+            deployed.wagaTimelock,
+            admin
+        ));
+        console.log("DonationHandler deployed at:", deployed.donationHandler);
+        
+        // Setup roles and permissions
+        _setupBaseRoles(deployed);
+        
+        console.log("Base Network deployment completed successfully!");
+        return deployed;
     }
     
     /**
@@ -245,32 +271,104 @@ contract DeployWAGADAO is Script {
     /**
      * @dev Setup roles and permissions for Base network contracts
      */
-    function _setupBaseRoles(
-        VERTGovernanceToken vertToken,
-        IdentityRegistry /* identityRegistry */,
-        DonationHandler donationHandler,
-        WAGAGovernor governor,
-        WAGATimelock timelock,
-        WAGACoffeeInventoryTokenV2 coffeeToken,
-        CooperativeGrantManagerV2 grantManager
-    ) internal {
-        // Grant minter role to DonationHandler
-        vertToken.grantRole(vertToken.MINTER_ROLE(), address(donationHandler));
+    function _setupBaseRoles(DeploymentAddresses memory deployed) internal {
+        console.log("Setting up Base Network roles and permissions...");
         
-        // Setup governance roles
-        timelock.grantRole(timelock.PROPOSER_ROLE(), address(governor));
-        timelock.grantRole(timelock.EXECUTOR_ROLE(), address(governor));
-        timelock.revokeRole(timelock.PROPOSER_ROLE(), msg.sender);
-        timelock.revokeRole(timelock.EXECUTOR_ROLE(), msg.sender);
+        // Grant Governor role to timelock
+        WAGATimelock(deployed.wagaTimelock).grantRole(
+            WAGATimelock(deployed.wagaTimelock).PROPOSER_ROLE(),
+            deployed.wagaGovernor
+        );
         
-        // Setup coffee token roles
-        coffeeToken.grantRole(coffeeToken.DAO_ADMIN_ROLE(), address(grantManager));
-        coffeeToken.grantRole(coffeeToken.INVENTORY_MANAGER_ROLE(), address(grantManager));
-        coffeeToken.grantRole(coffeeToken.MINTER_ROLE(), address(grantManager));
+        // Grant Executor role to timelock
+        WAGATimelock(deployed.wagaTimelock).grantRole(
+            WAGATimelock(deployed.wagaTimelock).EXECUTOR_ROLE(),
+            deployed.wagaGovernor
+        );
         
-        // Setup grant manager roles
-        grantManager.grantRole(grantManager.FINANCIAL_ROLE(), address(timelock));
-        grantManager.grantRole(grantManager.GRANT_MANAGER_ROLE(), address(timelock));
-        grantManager.grantRole(grantManager.GRANT_MANAGER_ROLE(), address(governor));
+        // Grant roles to Cooperative Grant Manager
+        CooperativeGrantManagerV2(deployed.cooperativeGrantManager).grantRole(
+            CooperativeGrantManagerV2(deployed.cooperativeGrantManager).GRANT_MANAGER_ROLE(),
+            deployed.wagaGovernor
+        );
+        
+        CooperativeGrantManagerV2(deployed.cooperativeGrantManager).grantRole(
+            CooperativeGrantManagerV2(deployed.cooperativeGrantManager).MILESTONE_VALIDATOR_ROLE(),
+            deployed.wagaGovernor
+        );
+        
+        // Grant roles to ZK Proof Manager
+        ZKProofManager(deployed.zkProofManager).grantRole(
+            ZKProofManager(deployed.zkProofManager).VERIFIER_ROLE(),
+            deployed.wagaGovernor
+        );
+        
+        ZKProofManager(deployed.zkProofManager).grantRole(
+            ZKProofManager(deployed.zkProofManager).PROOF_SUBMITTER_ROLE(),
+            deployed.wagaGovernor
+        );
+        
+        // Grant roles to RISC Zero Verifier
+        RISCZeroVerifier(deployed.riscZeroVerifier).grantRole(
+            RISCZeroVerifier(deployed.riscZeroVerifier).VERIFIER_ROLE(),
+            deployed.zkProofManager
+        );
+        
+        // Grant roles to Circom Verifier
+        CircomVerifier(deployed.circomVerifier).grantRole(
+            CircomVerifier(deployed.circomVerifier).VERIFIER_ROLE(),
+            deployed.zkProofManager
+        );
+        
+        // Setup supported circuits
+        _setupSupportedCircuits(deployed);
+        
+        console.log("Base Network roles and permissions configured successfully!");
+    }
+    
+    function _setupSupportedCircuits(DeploymentAddresses memory deployed) internal {
+        console.log("Setting up supported ZK proof circuits...");
+        
+        // Setup RISC Zero circuits for coffee quality and financial modeling
+        bytes32 coffeeQualityCircuit = keccak256("COFFEE_QUALITY_ALGORITHM_V1");
+        bytes32 financialModelCircuit = keccak256("FINANCIAL_RISK_ASSESSMENT_V1");
+        
+        RISCZeroVerifier(deployed.riscZeroVerifier).setCircuitSupport(
+            coffeeQualityCircuit,
+            "Coffee Quality Algorithm V1",
+            "1.0.0",
+            true
+        );
+        
+        RISCZeroVerifier(deployed.riscZeroVerifier).setCircuitSupport(
+            financialModelCircuit,
+            "Financial Risk Assessment V1",
+            "1.0.0",
+            true
+        );
+        
+        // Setup Circom circuits for simple verifications
+        bytes32 milestoneCircuit = keccak256("MILESTONE_COMPLETION_V1");
+        bytes32 identityCircuit = keccak256("IDENTITY_VERIFICATION_V1");
+        
+        CircomVerifier(deployed.circomVerifier).registerCircuit(
+            milestoneCircuit,
+            "Milestone Completion V1",
+            "1.0.0",
+            5,  // max inputs
+            1,  // max outputs
+            300000  // gas limit
+        );
+        
+        CircomVerifier(deployed.circomVerifier).registerCircuit(
+            identityCircuit,
+            "Identity Verification V1",
+            "1.0.0",
+            3,  // max inputs
+            1,  // max outputs
+            200000  // gas limit
+        );
+        
+        console.log("Supported ZK proof circuits configured successfully!");
     }
 }

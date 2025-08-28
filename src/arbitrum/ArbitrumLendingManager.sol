@@ -119,8 +119,7 @@ contract ArbitrumLendingManager is AccessControl, Pausable, ReentrancyGuard, CCI
         address _linkToken,
         address _treasury
     ) 
-        CCIPReceiver(_router) 
-        OwnerIsCreator()
+        CCIPReceiver(_router)
     {
         require(_usdcToken != address(0), "Invalid USDC token address");
         require(_aUsdcToken != address(0), "Invalid aUSDC token address");

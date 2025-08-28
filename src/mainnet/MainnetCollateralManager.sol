@@ -144,8 +144,7 @@ contract MainnetCollateralManager is AccessControl, Pausable, ReentrancyGuard, C
         address _identityRegistry,
         address _treasury
     ) 
-        CCIPReceiver(_router) 
-        OwnerIsCreator()
+        CCIPReceiver(_router)
     {
         if (_paxgToken == address(0)) revert MainnetCollateralManager__InvalidPaxgToken_constructor();
         if (_linkToken == address(0)) revert MainnetCollateralManager__InvalidLinkToken_constructor();

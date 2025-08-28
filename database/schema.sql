@@ -623,18 +623,39 @@ JOIN cooperatives c ON cg.cooperative_id = c.cooperative_id
 ORDER BY me.submitted_at DESC;
 
 -- ============================================================================
--- ZK-PROOF SYSTEM INTEGRATION
+-- ZK-PROOF SYSTEM INTEGRATION (UPDATED FOR NEW ARCHITECTURE)
 -- ============================================================================
+-- 
+-- ARCHITECTURAL CHANGES FROM V1 TO V2:
+-- 
+-- V1 (Previous): Stored only IPFS URIs for proof data and public inputs
+-- V2 (Current):  Stores actual proof data and public inputs as BYTEA
+-- 
+-- BENEFITS OF NEW ARCHITECTURE:
+-- 1. Data Integrity: Can verify public inputs hash matches actual data
+-- 2. Performance: No need to fetch from IPFS for verification
+-- 3. Reliability: Data available even if IPFS is down
+-- 4. Security: On-chain verification can use actual data directly
+-- 
+-- DATA STORAGE STRATEGY:
+-- - proof_data: Raw proof bytes (RISC Zero or Circom format)
+-- - public_inputs: Actual public inputs bytes
+-- - public_inputs_hash: SHA256 hash for integrity verification
+-- - metadata_uri: Optional IPFS URI for rich metadata (descriptions, etc.)
+--
 
--- Main ZK Proof Registry
+-- Main ZK Proof Registry (UPDATED: Now stores actual data, not just IPFS URIs)
 CREATE TABLE zk_proofs (
-    proof_hash VARCHAR(66) PRIMARY KEY,           -- Unique proof identifier
+    proof_hash VARCHAR(66) PRIMARY KEY,           -- Unique proof identifier (matches smart contract)
     proof_type VARCHAR(20) NOT NULL CHECK (proof_type IN ('RISC_ZERO', 'CIRCOM')),
     
-    -- Proof Data (IPFS references)
-    proof_data_uri TEXT NOT NULL,                 -- IPFS URI for raw proof data
-    public_inputs_uri TEXT NOT NULL,              -- IPFS URI for public inputs
-    metadata_uri TEXT NOT NULL,                   -- IPFS URI for proof metadata
+    -- Proof Data (ACTUAL DATA STORAGE, not just IPFS references)
+    proof_data BYTEA NOT NULL,                    -- Raw proof data (actual bytes)
+    public_inputs BYTEA NOT NULL,                 -- Actual public inputs (actual bytes)
+    public_inputs_hash VARCHAR(66) NOT NULL,      -- Hash of public inputs for integrity verification
+    
+    -- Metadata (still IPFS for rich metadata)
+    metadata_uri TEXT,                            -- IPFS URI for additional proof metadata (optional)
     
     -- Proof Metadata
     proof_name VARCHAR(255) NOT NULL,             -- Human-readable proof name
@@ -661,6 +682,24 @@ CREATE TABLE zk_proofs (
     blockchain_tx_hash VARCHAR(66),               -- Transaction hash
     block_number BIGINT,                         -- Block number
     network VARCHAR(50) DEFAULT 'base',           -- Network where proof was submitted
+    
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+-- ZK Proof Metadata (Matches Smart Contract ProofMetadata struct)
+CREATE TABLE zk_proof_metadata (
+    proof_hash VARCHAR(66) PRIMARY KEY REFERENCES zk_proofs(proof_hash) ON DELETE CASCADE,
+    
+    -- Proof Metadata (matches smart contract ProofMetadata struct)
+    proof_name VARCHAR(255) NOT NULL,             -- Human-readable proof name
+    description TEXT,                             -- Proof description
+    version VARCHAR(50) NOT NULL,                 -- Proof version
+    circuit_hash VARCHAR(66) NOT NULL,            -- Hash of the circuit/program
+    max_gas_limit BIGINT NOT NULL,                -- Maximum gas for verification
+    
+    -- Additional metadata
+    metadata_uri TEXT,                            -- IPFS URI for additional rich metadata (optional)
     
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
@@ -784,18 +823,24 @@ ALTER TABLE cooperatives ADD COLUMN identity_proof_verified BOOLEAN DEFAULT FALS
 -- ZK-PROOF VIEWS FOR COMMON QUERIES
 -- ============================================================================
 
--- ZK Proof Status Overview
+-- ZK Proof Status Overview (Updated for new architecture)
 CREATE VIEW zk_proof_status_overview AS
 SELECT 
     zp.proof_hash,
     zp.proof_type,
-    zp.proof_name,
     zp.verification_status,
     zp.submitter_address,
     zp.submitted_at,
     zp.verified_at,
     zp.verification_reason,
     zp.gas_used,
+    
+    -- Metadata information (from separate table)
+    zpm.proof_name,
+    zpm.description,
+    zpm.version,
+    zpm.circuit_hash,
+    zpm.max_gas_limit,
     
     -- Use case information
     zuc.use_case_type,
@@ -815,6 +860,7 @@ SELECT
     END as expiry_status
     
 FROM zk_proofs zp
+LEFT JOIN zk_proof_metadata zpm ON zp.proof_hash = zpm.proof_hash
 LEFT JOIN zk_proof_use_cases zuc ON zp.proof_hash = zuc.proof_hash
 ORDER BY zp.submitted_at DESC;
 
@@ -879,6 +925,35 @@ LEFT JOIN zk_proof_use_cases zuc ON cb.quality_proof_hash = zuc.proof_hash
 WHERE cb.quality_proof_hash IS NOT NULL
 ORDER BY cb.production_date DESC;
 
+-- ZK Proof Data Integrity Verification View
+CREATE VIEW zk_proof_data_integrity AS
+SELECT 
+    zp.proof_hash,
+    zp.proof_type,
+    zp.public_inputs_hash,
+    
+    -- Data integrity verification
+    CASE 
+        WHEN zp.public_inputs_hash = encode(sha256(zp.public_inputs), 'hex') THEN 'VALID'
+        ELSE 'CORRUPTED'
+    END as data_integrity_status,
+    
+    -- Data size information
+    length(zp.proof_data) as proof_data_size_bytes,
+    length(zp.public_inputs) as public_inputs_size_bytes,
+    
+    -- Metadata
+    zpm.proof_name,
+    zpm.circuit_hash,
+    
+    -- Verification status
+    zp.verification_status,
+    zp.verified_at
+    
+FROM zk_proofs zp
+LEFT JOIN zk_proof_metadata zpm ON zp.proof_hash = zpm.proof_hash
+ORDER BY zp.submitted_at DESC;
+
 -- ZK Proof Performance Metrics
 CREATE VIEW zk_proof_performance_metrics AS
 SELECT 
@@ -904,6 +979,31 @@ GROUP BY zp.proof_type;
 -- ============================================================================
 -- ZK-PROOF FUNCTIONS AND TRIGGERS
 -- ============================================================================
+
+-- Function to verify ZK proof data integrity
+CREATE OR REPLACE FUNCTION verify_zk_proof_integrity(proof_hash_param VARCHAR(66))
+RETURNS TABLE(
+    proof_hash VARCHAR(66),
+    integrity_status VARCHAR(20),
+    public_inputs_hash VARCHAR(66),
+    calculated_hash VARCHAR(66),
+    is_valid BOOLEAN
+) AS $$
+BEGIN
+    RETURN QUERY
+    SELECT 
+        zp.proof_hash,
+        CASE 
+            WHEN zp.public_inputs_hash = encode(sha256(zp.public_inputs), 'hex') THEN 'VALID'
+            ELSE 'CORRUPTED'
+        END as integrity_status,
+        zp.public_inputs_hash,
+        encode(sha256(zp.public_inputs), 'hex') as calculated_hash,
+        (zp.public_inputs_hash = encode(sha256(zp.public_inputs), 'hex')) as is_valid
+    FROM zk_proofs zp
+    WHERE zp.proof_hash = proof_hash_param;
+END;
+$$ LANGUAGE plpgsql;
 
 -- Function to automatically expire proofs
 CREATE OR REPLACE FUNCTION expire_zk_proofs()
@@ -965,42 +1065,58 @@ CREATE TRIGGER trigger_update_proof_verification_status
 
 -- Insert sample RISC Zero circuit support
 INSERT INTO zk_proofs (
-    proof_hash, proof_type, proof_data_uri, public_inputs_uri, metadata_uri,
-    proof_name, description, version, circuit_hash, submitter_address,
-    expiry_timestamp, network
+    proof_hash, proof_type, proof_data, public_inputs, public_inputs_hash,
+    submitter_address, expiry_timestamp, network
 ) VALUES (
     '0x1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef',
     'RISC_ZERO',
-    'ipfs://QmSampleRISCZeroProof',
-    'ipfs://QmSamplePublicInputs',
-    'ipfs://QmSampleMetadata',
-    'Coffee Quality Algorithm V1',
-    'RISC Zero proof for coffee quality scoring algorithm',
-    '1.0.0',
-    '0xabcdef1234567890abcdef1234567890abcdef1234567890abcdef1234567890',
+    '0x1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef', -- Raw proof data
+    '0x1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef', -- Public inputs
+    '0xabcdef1234567890abcdef1234567890abcdef1234567890abcdef1234567890', -- Public inputs hash
     '0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266',
     CURRENT_TIMESTAMP + INTERVAL '7 days',
     'base'
 );
 
+-- Insert corresponding metadata
+INSERT INTO zk_proof_metadata (
+    proof_hash, proof_name, description, version, circuit_hash, max_gas_limit
+) VALUES (
+    '0x1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef',
+    'Coffee Quality Algorithm V1',
+    'RISC Zero proof for coffee quality scoring algorithm',
+    '1.0.0',
+    '0xabcdef1234567890abcdef1234567890abcdef1234567890abcdef1234567890',
+    500000
+);
+
 -- Insert sample Circom circuit support
 INSERT INTO zk_proofs (
-    proof_hash, proof_type, proof_data_uri, public_inputs_uri, metadata_uri,
-    proof_name, description, version, circuit_hash, submitter_address,
+    proof_hash, proof_type, proof_data, public_inputs, public_inputs_hash,
+    submitter_address,
     expiry_timestamp, network
 ) VALUES (
     '0xabcdef1234567890abcdef1234567890abcdef1234567890abcdef1234567890',
     'CIRCOM',
-    'ipfs://QmSampleCircomProof',
-    'ipfs://QmSamplePublicInputs',
-    'ipfs://QmSampleMetadata',
+    '0xabcdef1234567890abcdef1234567890abcdef1234567890abcdef1234567890', -- Raw proof data
+    '0xabcdef1234567890abcdef1234567890abcdef1234567890abcdef1234567890', -- Public inputs
+    '0x1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef', -- Public inputs hash
+
+    '0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266',
+    CURRENT_TIMESTAMP + INTERVAL '30 days',
+    'base'
+);
+
+-- Insert corresponding metadata
+INSERT INTO zk_proof_metadata (
+    proof_hash, proof_name, description, version, circuit_hash, max_gas_limit
+) VALUES (
+    '0xabcdef1234567890abcdef1234567890abcdef1234567890abcdef1234567890',
     'Milestone Completion V1',
     'Circom proof for milestone completion verification',
     '1.0.0',
     '0x1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef',
-    '0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266',
-    CURRENT_TIMESTAMP + INTERVAL '30 days',
-    'base'
+    300000
 );
 
 -- Insert sample use cases
@@ -1035,6 +1151,10 @@ CREATE INDEX idx_zk_proofs_submitter ON zk_proofs(submitter_address);
 CREATE INDEX idx_zk_proofs_circuit ON zk_proofs(circuit_hash);
 CREATE INDEX idx_zk_proofs_expiry ON zk_proofs(expiry_timestamp);
 CREATE INDEX idx_zk_proofs_network ON zk_proofs(network);
+
+-- Metadata Indexes
+CREATE INDEX idx_zk_proof_metadata_circuit ON zk_proof_metadata(circuit_hash);
+CREATE INDEX idx_zk_proof_metadata_name ON zk_proof_metadata(proof_name);
 
 -- Use Cases Indexes
 CREATE INDEX idx_zk_proof_use_cases_type ON zk_proof_use_cases(use_case_type);

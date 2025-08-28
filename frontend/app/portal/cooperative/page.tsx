@@ -16,6 +16,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Input } from "@/components/ui/input"
 import { Textarea } from "@/components/ui/textarea"
 import { Progress } from "@/components/ui/progress"
+import ZKProofManager from "@/components/zk-proofs/ZKProofManager"
 import {
   Coffee,
   ArrowLeft,
@@ -35,7 +36,8 @@ import {
   Menu,
   Eye,
   Download,
-  Plus
+  Plus,
+  Shield
 } from "lucide-react"
 
 // Types aligned with database schema from schema.sql
@@ -342,10 +344,11 @@ export default function CooperativePortal() {
       {/* Main Content */}
       <div className="container mx-auto px-6 py-12">
         <Tabs value={selectedTab} onValueChange={setSelectedTab} className="space-y-8">
-          <TabsList className="grid w-full grid-cols-5 lg:w-auto lg:grid-cols-5">
+          <TabsList className="grid w-full grid-cols-6 lg:w-auto lg:grid-cols-6">
             <TabsTrigger value="overview">Overview</TabsTrigger>
             <TabsTrigger value="grants">Grants</TabsTrigger>
             <TabsTrigger value="milestones">Milestones</TabsTrigger>
+            <TabsTrigger value="zk-proofs">ZK Proofs</TabsTrigger>
             <TabsTrigger value="profile">Profile</TabsTrigger>
             <TabsTrigger value="application">Apply</TabsTrigger>
           </TabsList>
@@ -580,6 +583,11 @@ export default function CooperativePortal() {
                 </Card>
               ))}
             </div>
+          </TabsContent>
+
+          {/* ZK Proofs Tab */}
+          <TabsContent value="zk-proofs" className="space-y-6">
+            <ZKProofManager />
           </TabsContent>
 
           {/* Profile Tab */}

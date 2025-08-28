@@ -12,6 +12,11 @@ out/
 foundry.toml
 foundry.lock
 remappings.txt
+FrontendIntegrationGuide.md
+BEDBSchema.sql
+PHASED_DISBURSEMENT_DATABASE.md
+PHASED_DISBURSEMENT_STATUS.md
+PROJECT_STATUS.md
 
 # Solidity contracts and related files
 *.sol

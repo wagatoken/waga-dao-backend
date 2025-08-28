@@ -16,6 +16,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Input } from "@/components/ui/input"
 import { Textarea } from "@/components/ui/textarea"
 import { Progress } from "@/components/ui/progress"
+import ZKProofManager from "@/components/zk-proofs/ZKProofManager"
 import {
   Users,
   ArrowLeft,
@@ -35,7 +36,8 @@ import {
   Menu,
   ThumbsUp,
   ThumbsDown,
-  Minus
+  Minus,
+  Shield
 } from "lucide-react"
 
 // Types based on WAGAGovernor smart contract
@@ -334,10 +336,11 @@ export default function DAOPortal() {
       {/* Main Content */}
       <div className="container mx-auto px-6 py-12">
         <Tabs value={selectedTab} onValueChange={setSelectedTab} className="space-y-8">
-          <TabsList className="grid w-full grid-cols-5 lg:w-auto lg:grid-cols-5">
+          <TabsList className="grid w-full grid-cols-6 lg:w-auto lg:grid-cols-6">
             <TabsTrigger value="overview">Overview</TabsTrigger>
             <TabsTrigger value="proposals">Proposals</TabsTrigger>
             <TabsTrigger value="voting">Voting</TabsTrigger>
+            <TabsTrigger value="zk-proofs">ZK Proofs</TabsTrigger>
             <TabsTrigger value="treasury">Treasury</TabsTrigger>
             <TabsTrigger value="delegation">Delegation</TabsTrigger>
           </TabsList>
@@ -645,6 +648,11 @@ export default function DAOPortal() {
                 </CardContent>
               </Card>
             </div>
+          </TabsContent>
+
+          {/* ZK Proofs Tab */}
+          <TabsContent value="zk-proofs" className="space-y-6">
+            <ZKProofManager />
           </TabsContent>
 
           {/* Treasury Tab */}

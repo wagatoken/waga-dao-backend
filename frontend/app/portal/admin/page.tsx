@@ -15,6 +15,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { Input } from "@/components/ui/input"
 import { Textarea } from "@/components/ui/textarea"
+import ZKProofManager from "@/components/zk-proofs/ZKProofManager"
 import {
   Shield,
   ArrowLeft,
@@ -325,10 +326,11 @@ export default function AdminPortal() {
       {/* Main Content */}
       <div className="container mx-auto px-6 py-12">
         <Tabs value={selectedTab} onValueChange={setSelectedTab} className="space-y-8">
-          <TabsList className="grid w-full grid-cols-5 lg:w-auto lg:grid-cols-5">
+          <TabsList className="grid w-full grid-cols-6 lg:w-auto lg:grid-cols-6">
             <TabsTrigger value="overview">Overview</TabsTrigger>
             <TabsTrigger value="grants">Grants</TabsTrigger>
             <TabsTrigger value="validation">Validation</TabsTrigger>
+            <TabsTrigger value="zk-proofs">ZK Proofs</TabsTrigger>
             <TabsTrigger value="cooperatives">Cooperatives</TabsTrigger>
             <TabsTrigger value="system">System</TabsTrigger>
           </TabsList>
@@ -547,6 +549,11 @@ export default function AdminPortal() {
                 </Card>
               ))}
             </div>
+          </TabsContent>
+
+          {/* ZK Proofs Tab */}
+          <TabsContent value="zk-proofs" className="space-y-6">
+            <ZKProofManager />
           </TabsContent>
 
           {/* Cooperatives Tab */}

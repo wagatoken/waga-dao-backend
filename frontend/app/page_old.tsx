@@ -363,12 +363,12 @@ export default function WagaDAOLanding() {
               <CardContent className="p-8 relative z-10">
                 <div className="flex items-center mb-6">
                   <MapPin className="h-6 w-6 text-amber-600 mr-3 transition-transform duration-300 group-hover:scale-125" />
-                  <h3 className="text-2xl font-bold text-amber-700">Bamendakwe, Cameroon</h3>
+                  <h3 className="text-2xl font-bold text-amber-700">Jimma Zone, Ethiopia</h3>
                 </div>
-                <p className="text-gray-700 mb-4">Post-conflict zone requiring full infrastructure development</p>
+                <p className="text-gray-700 mb-4">Establishing coffee processing infrastructure and organic certification</p>
                 <div className="flex items-center text-sm text-amber-600">
                   <Leaf className="h-4 w-4 mr-2 transition-transform duration-300 group-hover:rotate-12" />
-                  New agroforestry plantations planned
+                  New sustainable farming initiatives
                 </div>
               </CardContent>
             </Card>

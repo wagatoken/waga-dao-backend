@@ -104,7 +104,7 @@ export default function AdminPortal() {
     {
       grantId: 1,
       cooperativeId: 1,
-      cooperativeName: "Finca El Paraíso Cooperative",
+      cooperativeName: "Sidama Coffee Cooperative",
       grantAmount: 50000,
       status: 'ACTIVE',
       usePhasedDisbursement: true,
@@ -118,7 +118,7 @@ export default function AdminPortal() {
     {
       grantId: 2,
       cooperativeId: 2,
-      cooperativeName: "Alta Vista Coffee Collective",
+      cooperativeName: "Bugisu Coffee Cooperative",
       grantAmount: 75000,
       status: 'ACTIVE',
       usePhasedDisbursement: true,
@@ -157,11 +157,11 @@ export default function AdminPortal() {
   const [cooperatives, setCooperatives] = useState<Cooperative[]>([
     {
       cooperativeId: 1,
-      name: "Finca El Paraíso Cooperative",
-      location: "Huehuetenango, Guatemala",
-      country: "Guatemala",
-      contactPerson: "Maria Rodriguez",
-      email: "maria@fincaparaiso.gt",
+      name: "Sidama Coffee Cooperative",
+      location: "Yirgacheffe, Sidama Zone",
+      country: "Ethiopia",
+      contactPerson: "Alemayehu Tadesse",
+      email: "alemayehu@sidamacoffee.et",
       paymentAddress: "0x742d35Cc6d7...",
       farmersCount: 45,
       isVerified: true,
@@ -169,11 +169,11 @@ export default function AdminPortal() {
     },
     {
       cooperativeId: 2,
-      name: "Alta Vista Coffee Collective",
-      location: "Antigua, Guatemala",
-      country: "Guatemala",
-      contactPerson: "Carlos Mendez",
-      email: "carlos@altavista.gt",
+      name: "Bugisu Coffee Cooperative",
+      location: "Mount Elgon, Eastern Uganda",
+      country: "Uganda",
+      contactPerson: "Sarah Namugga",
+      email: "sarah@bugisucoffee.ug",
       paymentAddress: "0x892e46Dd8e9...",
       farmersCount: 32,
       isVerified: false
@@ -384,7 +384,7 @@ export default function AdminPortal() {
                     <CheckCircle className="w-6 h-6 text-green-600" />
                     <div>
                       <div className="font-medium">Milestone Completed</div>
-                      <div className="text-sm text-gray-600">Finca El Paraíso - Irrigation Installation</div>
+                      <div className="text-sm text-gray-600">Sidama Coffee - Irrigation Installation</div>
                     </div>
                     <div className="text-sm text-gray-500 ml-auto">2 hours ago</div>
                   </div>
@@ -393,7 +393,7 @@ export default function AdminPortal() {
                     <Clock className="w-6 h-6 text-orange-600" />
                     <div>
                       <div className="font-medium">Evidence Submitted</div>
-                      <div className="text-sm text-gray-600">Alta Vista - Land preparation documentation</div>
+                      <div className="text-sm text-gray-600">Bugisu Coffee - Land preparation documentation</div>
                     </div>
                     <div className="text-sm text-gray-500 ml-auto">5 hours ago</div>
                   </div>

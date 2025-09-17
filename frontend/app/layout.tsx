@@ -6,7 +6,7 @@ import './globals.css'
 
 export const metadata: Metadata = {
   title: 'WAGA DAO - Regenerative Coffee Finance',
-  description: 'Empowering Ethiopian coffee cooperatives through Web3 and regenerative agriculture',
+  description: 'Empowering Ethiopian and Sub-Saharan African coffee cooperatives through Web3 and regenerative agriculture',
   generator: 'Next.js',
 }
 

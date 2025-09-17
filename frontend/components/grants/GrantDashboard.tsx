@@ -437,24 +437,24 @@ export default function GrantDashboard({ userRole = "public" }: GrantDashboardPr
               <CardContent>
                 <div className="space-y-3">
                   <div className="flex justify-between items-center">
-                    <span className="text-sm">Cameroon</span>
-                    <div className="flex items-center space-x-2">
-                      <Progress value={45} className="w-20 h-2" />
-                      <span className="text-sm font-semibold">45%</span>
-                    </div>
-                  </div>
-                  <div className="flex justify-between items-center">
-                    <span className="text-sm">Kenya</span>
-                    <div className="flex items-center space-x-2">
-                      <Progress value={32} className="w-20 h-2" />
-                      <span className="text-sm font-semibold">32%</span>
-                    </div>
-                  </div>
-                  <div className="flex justify-between items-center">
                     <span className="text-sm">Ethiopia</span>
                     <div className="flex items-center space-x-2">
-                      <Progress value={23} className="w-20 h-2" />
-                      <span className="text-sm font-semibold">23%</span>
+                      <Progress value={55} className="w-20 h-2" />
+                      <span className="text-sm font-semibold">55%</span>
+                    </div>
+                  </div>
+                  <div className="flex justify-between items-center">
+                    <span className="text-sm">Uganda</span>
+                    <div className="flex items-center space-x-2">
+                      <Progress value={25} className="w-20 h-2" />
+                      <span className="text-sm font-semibold">25%</span>
+                    </div>
+                  </div>
+                  <div className="flex justify-between items-center">
+                    <span className="text-sm">Tanzania</span>
+                    <div className="flex items-center space-x-2">
+                      <Progress value={20} className="w-20 h-2" />
+                      <span className="text-sm font-semibold">20%</span>
                     </div>
                   </div>
                 </div>

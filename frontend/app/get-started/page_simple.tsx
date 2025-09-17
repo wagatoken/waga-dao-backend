@@ -209,7 +209,7 @@ export default function GetStarted() {
             <Alert className="mb-8 bg-green-50 border-green-200">
               <Globe className="h-4 w-4" />
               <AlertDescription className="text-green-800">
-                <strong>Global Impact:</strong> Supporting 50+ cooperatives across Rwanda, Colombia, and Ethiopia. Join the movement for sustainable coffee farming.
+                <strong>Regional Impact:</strong> Supporting 50+ cooperatives across Ethiopia, Uganda, and Tanzania. Join the movement for sustainable coffee farming in East Africa.
               </AlertDescription>
             </Alert>
           </div>

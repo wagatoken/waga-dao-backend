@@ -30,7 +30,7 @@ export default function About() {
     {
       icon: MapPin,
       title: "Locations",
-      description: "Active Ethiopia, Cameroon, and Uganda with a projected 50+ cooperative partnerships"
+      description: "Active in Ethiopia, Uganda, and Tanzania with a projected 50+ cooperative partnerships"
     },
     {
       icon: Users,

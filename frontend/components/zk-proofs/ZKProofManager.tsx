@@ -7,6 +7,7 @@
 
 import { useState, useEffect } from 'react'
 import { useZKProofs, useProofSubmission } from '@/hooks/useZKProofs'
+import ZKProofLoadingFallback from './ZKProofLoadingFallback'
 import { 
   Card, 
   CardContent, 
@@ -220,6 +221,18 @@ export default function ZKProofManager() {
       hour: '2-digit',
       minute: '2-digit'
     })
+  }
+
+  // Show loading fallback if there's an error or loading state
+  if (error && !loading) {
+    return <ZKProofLoadingFallback error={error} onRetry={() => {
+      clearError()
+      refreshProofs()
+    }} />
+  }
+
+  if (loading && !proofs.length && !databaseProofs.length) {
+    return <ZKProofLoadingFallback />
   }
 
   return (

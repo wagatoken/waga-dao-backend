@@ -1,19 +1,6 @@
 /**
  * WAGA DAO - Home Page
- * Streamlined UI  // Simulate real-time updates
-  useEffect(() => {
-    const interval = setInterval(() => {
-      setMetrics(prev => ({
-        ...prev,
-        activeFarmers: { 
-          ...prev.activeFarmers, 
-          actual: Math.max(0, prev.activeFarmers.actual + Math.floor(Math.random() * 3) - 1)
-        }
-      }))
-    }, 5000)
-
-    return () => clearInterval(interval)
-  }, [])functionality and direct portal access
+ * Streamlined UI functionality and direct portal access
  */
 
 "use client"
@@ -36,6 +23,9 @@ import {
   BarChart3,
   Target,
   Menu,
+  Eye,
+  Lock,
+  Zap,
   X
 } from "lucide-react"
 
@@ -92,6 +82,21 @@ export default function Home() {
       metrics: { proposals: "7", members: "2,840", treasury: "$30M" }
     }
   ]
+
+  // Simulate real-time updates
+  useEffect(() => {
+    const interval = setInterval(() => {
+      setMetrics(prev => ({
+        ...prev,
+        activeFarmers: { 
+          ...prev.activeFarmers, 
+          actual: Math.max(0, prev.activeFarmers.actual + Math.floor(Math.random() * 3) - 1)
+        }
+      }))
+    }, 5000)
+
+    return () => clearInterval(interval)
+  }, [])
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-900 via-green-900 to-emerald-900">
@@ -172,12 +177,12 @@ export default function Home() {
               Regenerative
               <br />
               <span className="text-transparent bg-clip-text bg-gradient-to-r from-amber-400 via-green-400 to-emerald-400">
-                Coffee Economy
+                Coffee Finance
               </span>
             </h1>
             
             <p className="text-xl text-white/70 mb-8 max-w-2xl mx-auto">
-              Blockchain-powered grants, milestone tracking, and coffee tokenization across Africa
+              Coffee-backed grants for regenerative value addition with zero-knowledge privacy protection
             </p>
 
             <div className="flex flex-col sm:flex-row gap-4 justify-center">
@@ -193,6 +198,44 @@ export default function Home() {
                   Learn More
                 </Button>
               </Link>
+            </div>
+          </div>
+
+          {/* Coffee-Backed Regenerative Features with Privacy */}
+          <div className="mb-16">
+            <h2 className="text-3xl font-bold text-white text-center mb-8">
+              Coffee-Backed Regenerative Finance
+            </h2>
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+              <Card className="bg-black/20 backdrop-blur-xl border-white/10 hover:border-green-500/30 transition-all duration-300">
+                <CardContent className="p-6 text-center">
+                  <Coffee className="w-12 h-12 text-green-400 mx-auto mb-4" />
+                  <h3 className="text-lg font-bold text-white mb-2">Coffee-Backed Grants</h3>
+                  <p className="text-white/70 text-sm">
+                    Grants secured by real coffee inventory, supporting value addition across the coffee supply chain
+                  </p>
+                </CardContent>
+              </Card>
+
+              <Card className="bg-black/20 backdrop-blur-xl border-white/10 hover:border-amber-500/30 transition-all duration-300">
+                <CardContent className="p-6 text-center">
+                  <Zap className="w-12 h-12 text-amber-400 mx-auto mb-4" />
+                  <h3 className="text-lg font-bold text-white mb-2">Value Addition Focus</h3>
+                  <p className="text-white/70 text-sm">
+                    Finance processing equipment, quality improvements, and sustainable farming practices
+                  </p>
+                </CardContent>
+              </Card>
+
+              <Card className="bg-black/20 backdrop-blur-xl border-white/10 hover:border-purple-500/30 transition-all duration-300">
+                <CardContent className="p-6 text-center">
+                  <Shield className="w-12 h-12 text-purple-400 mx-auto mb-4" />
+                  <h3 className="text-lg font-bold text-white mb-2">Privacy Protected</h3>
+                  <p className="text-white/70 text-sm">
+                    Zero-knowledge proofs protect sensitive business data while maintaining transparency
+                  </p>
+                </CardContent>
+              </Card>
             </div>
           </div>
 
@@ -339,6 +382,102 @@ export default function Home() {
           </Card>
         </div>
       </section>
+
+      {/* Footer */}
+      <footer className="bg-black/30 backdrop-blur-xl border-t border-white/10 py-12">
+        <div className="container mx-auto px-6 max-w-7xl">
+          <div className="grid grid-cols-1 md:grid-cols-4 gap-8 mb-8">
+            {/* Brand */}
+            <div className="space-y-4">
+              <div className="flex items-center space-x-3">
+                <div className="w-10 h-10 bg-gradient-to-br from-amber-400 to-green-500 rounded-2xl flex items-center justify-center">
+                  <Coffee className="h-6 w-6 text-white" />
+                </div>
+                <div>
+                  <div className="text-white font-bold">WAGA DAO</div>
+                  <div className="text-white/60 text-sm">Regenerative Coffee Finance</div>
+                </div>
+              </div>
+              <p className="text-white/70 text-sm">
+                Coffee-backed grants for regenerative value addition with zero-knowledge privacy protection.
+              </p>
+            </div>
+
+            {/* Platform */}
+            <div className="space-y-4">
+              <h4 className="text-white font-semibold">Platform</h4>
+              <div className="space-y-2">
+                <a href="/portal/cooperative" className="block text-white/70 hover:text-white transition-colors text-sm">
+                  Cooperative Portal
+                </a>
+                <a href="/portal/admin" className="block text-white/70 hover:text-white transition-colors text-sm">
+                  Admin Dashboard
+                </a>
+                <a href="/treasury" className="block text-white/70 hover:text-white transition-colors text-sm">
+                  Treasury
+                </a>
+                <a href="/grants" className="block text-white/70 hover:text-white transition-colors text-sm">
+                  Grants
+                </a>
+              </div>
+            </div>
+
+            {/* Resources */}
+            <div className="space-y-4">
+              <h4 className="text-white font-semibold">Resources</h4>
+              <div className="space-y-2">
+                <a href="/how-it-works" className="block text-white/70 hover:text-white transition-colors text-sm">
+                  How it Works
+                </a>
+                <a href="/get-started" className="block text-white/70 hover:text-white transition-colors text-sm">
+                  Get Started
+                </a>
+                <a href="/about" className="block text-white/70 hover:text-white transition-colors text-sm">
+                  About
+                </a>
+              </div>
+            </div>
+
+            {/* Connect */}
+            <div className="space-y-4">
+              <h4 className="text-white font-semibold">Connect</h4>
+              <div className="space-y-2">
+                <a href="mailto:team@wagatoken.io" className="block text-white/70 hover:text-white transition-colors text-sm">
+                  Contact Us
+                </a>
+                <a href="#" className="block text-white/70 hover:text-white transition-colors text-sm">
+                  Twitter
+                </a>
+                <a href="#" className="block text-white/70 hover:text-white transition-colors text-sm">
+                  Discord
+                </a>
+                <a href="#" className="block text-white/70 hover:text-white transition-colors text-sm">
+                  GitHub
+                </a>
+              </div>
+            </div>
+          </div>
+
+          {/* Bottom Bar */}
+          <div className="border-t border-white/10 pt-8 flex flex-col md:flex-row justify-between items-center space-y-4 md:space-y-0">
+            <div className="text-white/60 text-sm">
+              © 2025 WAGA DAO • Swiss Non-profit Association • Regenerative Coffee Finance
+            </div>
+            <div className="flex items-center space-x-6">
+              <a href="#" className="text-white/60 hover:text-white text-sm transition-colors">
+                Privacy Policy
+              </a>
+              <a href="#" className="text-white/60 hover:text-white text-sm transition-colors">
+                Terms of Service
+              </a>
+              <div className="flex items-center space-x-2">
+                <div className="w-2 h-2 bg-green-400 rounded-full animate-pulse"></div>
+                <span className="text-green-400 text-sm">All Systems Operational</span>
+              </div>
+            </div>
+          </div>
+        </div>
+      </footer>
     </div>
   )
 }
